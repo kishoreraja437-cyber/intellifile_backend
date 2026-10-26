@@ -1,4 +1,3 @@
-```php
 <?php
 
 $host = "localhost";
@@ -31,4 +30,3 @@ try {
 
     exit;
 }
-```

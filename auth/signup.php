@@ -1,4 +1,4 @@
-```php
+
 <?php
 
 header("Content-Type: application/json; charset=UTF-8");
@@ -20,7 +20,6 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
         "success" => false,
         "message" => "Only POST requests are allowed"
     ]);
-
     exit;
 }
 
@@ -95,6 +94,16 @@ if (strlen($password) < 8) {
 
     exit;
 }
+// if(strlen($full_name) < 3){
+//     http_response_code(400);
+//     echo json_encode([
+//         "success" => false,
+//         "message" => "full name must be more than 3 char"
+//     ]
+//     );
+//     exit;
+// }
+
 
 // Hash password before storing
 $password_hash = password_hash(
@@ -153,6 +162,4 @@ try {
 }
 
 $conn->close();
-
 ?>
-```
