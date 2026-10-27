@@ -3,7 +3,7 @@
 header("Content-Type: application/json; charset=UTF-8");
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
-header("Access-Control-Allow-Headers: Content-Type");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
     http_response_code(204);
@@ -12,7 +12,6 @@ if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
 
 if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     http_response_code(405);
-
     echo json_encode([
         "success" => false,
         "message" => "Only POST requests are allowed"
@@ -27,10 +26,9 @@ $data = json_decode(file_get_contents("php://input"), true);
 
 if (!is_array($data)) {
     http_response_code(400);
-
     echo json_encode([
         "success" => false,
-        "message" => "Invalid request data"
+        "message" => "Invalid request data. Please provide valid JSON."
     ]);
     exit;
 }
@@ -42,7 +40,6 @@ $password = $data["password"] ?? "";
 // Validate fields
 if ($email === "" || $password === "") {
     http_response_code(400);
-
     echo json_encode([
         "success" => false,
         "message" => "Email and password are required"
@@ -52,7 +49,6 @@ if ($email === "" || $password === "") {
 
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     http_response_code(400);
-
     echo json_encode([
         "success" => false,
         "message" => "Please enter a valid email address"
@@ -63,7 +59,7 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 try {
     // Find user by email
     $stmt = $conn->prepare(
-        "SELECT id, full_name, email, password
+        "SELECT id, full_name, email, password, profile_image, created_at
          FROM users
          WHERE email = ?
          LIMIT 1"
@@ -74,38 +70,64 @@ try {
 
     $result = $stmt->get_result();
     $user = $result->fetch_assoc();
+    $stmt->close();
 
-    // Verify password hash
-    if ($user && password_verify($password, $user["password"])) {
+    // Verify password (supports bcrypt hash and plaintext fallback for initial test seeds)
+    $passwordValid = false;
+    if ($user) {
+        if (password_verify($password, $user["password"])) {
+            $passwordValid = true;
+        } elseif ($password === $user["password"]) {
+            // Upgrade legacy plain-text password to secure hash automatically
+            $passwordValid = true;
+            $newHash = password_hash($password, PASSWORD_DEFAULT);
+            $upgradeStmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+            if ($upgradeStmt) {
+                $upgradeStmt->bind_param("si", $newHash, $user["id"]);
+                $upgradeStmt->execute();
+                $upgradeStmt->close();
+            }
+        }
+    }
+
+    if ($passwordValid) {
+        // Build image URL dynamically based on requesting host
+        $imageUrl = null;
+        if (!empty($user["profile_image"])) {
+            if (filter_var($user["profile_image"], FILTER_VALIDATE_URL)) {
+                $imageUrl = $user["profile_image"];
+            } else {
+                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+                $host = $_SERVER['HTTP_HOST'] ?? "localhost";
+                $imageUrl = $protocol . $host . "/intellifile_backend/" . ltrim($user["profile_image"], "/");
+            }
+        }
 
         http_response_code(200);
-
         echo json_encode([
             "success" => true,
             "message" => "Login successful",
             "user" => [
                 "id" => (int) $user["id"],
                 "full_name" => $user["full_name"],
-                "email" => $user["email"]
+                "email" => $user["email"],
+                "profile_image" => $imageUrl,
+                "profile_image_path" => $user["profile_image"],
+                "created_at" => $user["created_at"]
             ]
         ]);
-
     } else {
         http_response_code(401);
-
         echo json_encode([
             "success" => false,
             "message" => "Invalid email or password"
         ]);
     }
 
-    $stmt->close();
-
 } catch (mysqli_sql_exception $e) {
     error_log($e->getMessage());
 
     http_response_code(500);
-
     echo json_encode([
         "success" => false,
         "message" => "Login failed. Please try again."
@@ -113,5 +135,3 @@ try {
 }
 
 $conn->close();
-
-?>

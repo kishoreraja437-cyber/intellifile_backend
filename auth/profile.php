@@ -1,101 +1,112 @@
-
 <?php
 
-header("Content-Type: application/json");
+header("Content-Type: application/json; charset=UTF-8");
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization");
 
-require_once __DIR__ . "/../config/db.php";
+if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") {
+    http_response_code(204);
+    exit;
+}
 
-// Allow only GET requests
 if ($_SERVER["REQUEST_METHOD"] !== "GET") {
     http_response_code(405);
-
     echo json_encode([
         "success" => false,
         "message" => "Only GET method is allowed."
     ]);
-
     exit;
 }
 
-// Get registered user's email
+require_once __DIR__ . "/../config/db.php";
+
+// Accept lookup via email or user_id / id
 $email = trim($_GET["email"] ?? "");
+$userId = intval($_GET["user_id"] ?? $_GET["id"] ?? 0);
 
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+if ($email === "" && $userId <= 0) {
     http_response_code(400);
+    echo json_encode([
+        "success" => false,
+        "message" => "Please provide a user email or user_id."
+    ]);
+    exit;
+}
 
+if ($email !== "" && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    http_response_code(400);
     echo json_encode([
         "success" => false,
         "message" => "Please provide a valid email address."
     ]);
-
     exit;
 }
 
-// Fetch profile details from database
-$stmt = $conn->prepare(
-    "SELECT id, full_name, email, profile_image
-     FROM users
-     WHERE email = ?
-     LIMIT 1"
-);
-
-if (!$stmt) {
-    http_response_code(500);
-
-    echo json_encode([
-        "success" => false,
-        "message" => "Database query failed."
-    ]);
-
-    exit;
-}
-
-$stmt->bind_param("s", $email);
-$stmt->execute();
-
-$result = $stmt->get_result();
-$user = $result->fetch_assoc();
-
-if ($user) {
-
-    $imageUrl = null;
-
-    if (!empty($user["profile_image"])) {
-
-        if (filter_var(
-            $user["profile_image"],
-            FILTER_VALIDATE_URL
-        )) {
-            $imageUrl = $user["profile_image"];
-        } else {
-            $imageUrl =
-                "http://localhost/intellifile_backend/" .
-                ltrim($user["profile_image"], "/");
-        }
+try {
+    if ($userId > 0) {
+        $stmt = $conn->prepare(
+            "SELECT id, full_name, email, profile_image, created_at
+             FROM users
+             WHERE id = ?
+             LIMIT 1"
+        );
+        $stmt->bind_param("i", $userId);
+    } else {
+        $stmt = $conn->prepare(
+            "SELECT id, full_name, email, profile_image, created_at
+             FROM users
+             WHERE email = ?
+             LIMIT 1"
+        );
+        $stmt->bind_param("s", $email);
     }
 
-    echo json_encode([
-        "success" => true,
-        "message" => "Profile fetched successfully.",
-        "profile" => [
-            "id" => (int) $user["id"],
-            "full_name" => $user["full_name"],
-            "email" => $user["email"],
-            "profile_image" => $imageUrl
-        ]
-    ]);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $user = $result->fetch_assoc();
+    $stmt->close();
 
-} else {
+    if ($user) {
+        $imageUrl = null;
+        if (!empty($user["profile_image"])) {
+            if (filter_var($user["profile_image"], FILTER_VALIDATE_URL)) {
+                $imageUrl = $user["profile_image"];
+            } else {
+                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
+                $host = $_SERVER['HTTP_HOST'] ?? "localhost";
+                $imageUrl = $protocol . $host . "/intellifile_backend/" . ltrim($user["profile_image"], "/");
+            }
+        }
 
-    http_response_code(404);
+        http_response_code(200);
+        echo json_encode([
+            "success" => true,
+            "message" => "Profile fetched successfully.",
+            "profile" => [
+                "id" => (int) $user["id"],
+                "full_name" => $user["full_name"],
+                "email" => $user["email"],
+                "profile_image" => $imageUrl,
+                "profile_image_path" => $user["profile_image"],
+                "created_at" => $user["created_at"]
+            ]
+        ]);
+    } else {
+        http_response_code(404);
+        echo json_encode([
+            "success" => false,
+            "message" => "User not found."
+        ]);
+    }
 
+} catch (mysqli_sql_exception $e) {
+    error_log($e->getMessage());
+    http_response_code(500);
     echo json_encode([
         "success" => false,
-        "message" => "User not found."
+        "message" => "Failed to fetch user profile."
     ]);
 }
 
-$stmt->close();
 $conn->close();
-
-?>

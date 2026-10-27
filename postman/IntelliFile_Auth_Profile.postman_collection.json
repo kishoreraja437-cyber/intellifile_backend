@@ -1,0 +1,371 @@
+{
+	"info": {
+		"_postman_id": "a9840243-1579-4c12-a1b4-9c8dfb201f82",
+		"name": "IntelliFile - Auth & Profile APIs",
+		"description": "Complete collection of APIs for Authentication, User Profile, Password Management, and User Settings matching the IntelliFile UI.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "1. Sign Up (Register)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"full_name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/signup.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"signup.php"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john@example.com\",\n    \"password\": \"Password123!\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/login.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"login.php"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3. Forgot / Reset Password",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john@example.com\",\n    \"new_password\": \"NewPassword123!\",\n    \"confirm_password\": \"NewPassword123!\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/forgotpassword.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"forgotpassword.php"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4. Change Password (Authenticated)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john@example.com\",\n    \"current_password\": \"NewPassword123!\",\n    \"new_password\": \"SecurePass999!\",\n    \"confirm_password\": \"SecurePass999!\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/change_password.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"change_password.php"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "5. Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john@example.com\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/logout.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"logout.php"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Profile",
+			"item": [
+				{
+					"name": "1. Get Profile by Email",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/profile.php?email=john@example.com",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"profile.php"
+							],
+							"query": [
+								{
+									"key": "email",
+									"value": "john@example.com"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. Get Profile by User ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/profile.php?id=1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"profile.php"
+							],
+							"query": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3. Edit Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"current_email\": \"john@example.com\",\n    \"full_name\": \"Johnathan Doe\",\n    \"email\": \"johnathan@example.com\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/edit_profile.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"edit_profile.php"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4. Upload Profile Image",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "email",
+									"value": "john@example.com",
+									"type": "text"
+								},
+								{
+									"key": "profile_image",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/upload_profile.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"upload_profile.php"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "5. Remove Profile Photo",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"john@example.com\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/remove_profile_photo.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"remove_profile_photo.php"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Settings",
+			"item": [
+				{
+					"name": "1. Get User Settings (Theme & Notifications)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/get_settings.php?user_id=1",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"get_settings.php"
+							],
+							"query": [
+								{
+									"key": "user_id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. Update User Settings (Theme & Notifications)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": 1,\n    \"theme_mode\": \"DARK\",\n    \"important_alerts\": true,\n    \"deadline_reminders\": true,\n    \"new_doc_alerts\": true,\n    \"quiet_hours\": false\n}"
+						},
+						"url": {
+							"raw": "http://localhost/intellifile_backend/auth/update_settings.php",
+							"protocol": "http",
+							"host": [
+								"localhost"
+							],
+							"path": [
+								"intellifile_backend",
+								"auth",
+								"update_settings.php"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	]
+}
+
