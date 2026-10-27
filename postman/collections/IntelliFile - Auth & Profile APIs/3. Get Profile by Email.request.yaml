@@ -1,0 +1,6 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/profile.php?email=kishore@gmail.com
+method: GET
+queryParams:
+  email: kishore@gmail.com
+order: 3000

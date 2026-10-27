@@ -1,0 +1,10 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/logout.php
+method: POST
+body:
+  type: json
+  content: |-
+    {
+        "email": "john@example.com"
+    }
+order: 5000

@@ -1,0 +1,14 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/edit_profile.php
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "user_id": 5,
+        "full_name": "Kishore Updated",
+        "email": "kishore@gmail.com"
+    }
+order: 5000

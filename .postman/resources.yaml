@@ -1,9 +1,17 @@
 # Use this workspace to collaborate
 workspace:
-  id: 6be59863-860d-4212-8b21-bb386f2c8739
+  id: 21a5cf4d-017d-4de9-8ec2-d54d9bd35275
 
-# All resources in the `postman/` folder are automatically registered in Local View.
-# Point to additional files outside the `postman/` folder to register them individually. Example:
-#localResources:
-#  collections:
-#    - ../tests/E2E Test Collection/
+localResources:
+  collections:
+    - ../IntelliFile - Auth & Profile APIs
+  environments:
+    - ../IntelliFile_Local.postman_environment.json
+    - ../uploads/postman/IntelliFile_Local.postman_environment.json
+    - ../IntelliFile Local Environment.environment.yaml
+
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../postman/collections/IntelliFile - Auth & Profile APIs: cf0a7d6f-8975-41a9-b643-922f790376a4

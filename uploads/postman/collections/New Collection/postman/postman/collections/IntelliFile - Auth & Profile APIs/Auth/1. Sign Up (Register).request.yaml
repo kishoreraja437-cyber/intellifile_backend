@@ -1,0 +1,14 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/signup.php
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "full_name": "John Doe",
+        "email": "john@example.com",
+        "password": "Password123!"
+    }
+order: 1000

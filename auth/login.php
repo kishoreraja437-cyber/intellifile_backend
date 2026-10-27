@@ -19,6 +19,10 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     exit;
 }
 
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . "/../config/db.php";
 
 // Read JSON request
@@ -102,6 +106,10 @@ try {
                 $imageUrl = $protocol . $host . "/intellifile_backend/" . ltrim($user["profile_image"], "/");
             }
         }
+
+        // Save authenticated user to session
+        $_SESSION["user_id"] = (int) $user["id"];
+        $_SESSION["email"] = $user["email"];
 
         http_response_code(200);
         echo json_encode([

@@ -1,0 +1,6 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/profile.php?id=5
+method: GET
+queryParams:
+  id: "5"
+order: 4000

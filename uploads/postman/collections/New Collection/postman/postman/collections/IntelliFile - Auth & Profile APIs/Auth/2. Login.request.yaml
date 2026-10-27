@@ -1,0 +1,13 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/login.php
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "email": "john@example.com",
+        "password": "Password123!"
+    }
+order: 2000

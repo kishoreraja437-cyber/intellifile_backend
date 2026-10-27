@@ -1,0 +1,8 @@
+name: IntelliFile Local Environment
+values:
+  - key: base_url
+    value: 'http://localhost/intellifile_backend'
+  - key: email
+    value: kishore@gmail.com
+  - key: user_id
+    value: '5'

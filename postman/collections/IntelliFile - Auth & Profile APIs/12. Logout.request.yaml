@@ -1,0 +1,4 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/logout.php
+method: POST
+order: 12000

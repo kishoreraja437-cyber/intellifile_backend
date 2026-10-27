@@ -1,0 +1,17 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/update_settings.php
+method: POST
+headers:
+  Content-Type: application/json
+body:
+  type: text
+  content: |-
+    {
+        "user_id": 5,
+        "theme_mode": "DARK",
+        "important_alerts": true,
+        "deadline_reminders": false,
+        "new_doc_alerts": true,
+        "quiet_hours": true
+    }
+order: 11000

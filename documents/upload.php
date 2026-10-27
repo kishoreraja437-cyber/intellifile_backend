@@ -1,0 +1,150 @@
+<?php
+
+require_once __DIR__ . "/../config/auth_helper.php";
+
+handleCorsPreflight();
+
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    sendJsonResponse(405, [
+        "success" => false,
+        "message" => "Only POST method is allowed."
+    ]);
+}
+
+$userId = requireAuth($conn);
+
+// Auto-create documents table if not exists
+$conn->query("
+    CREATE TABLE IF NOT EXISTS `documents` (
+      `id` int(11) NOT NULL AUTO_INCREMENT,
+      `user_id` int(11) NOT NULL,
+      `title` varchar(255) NOT NULL,
+      `format` varchar(20) NOT NULL DEFAULT 'PDF',
+      `file_size` varchar(50) NOT NULL DEFAULT '1.0 MB',
+      `file_path` varchar(500) DEFAULT NULL,
+      `category` varchar(100) NOT NULL DEFAULT 'General',
+      `location` varchar(100) NOT NULL DEFAULT 'Internal Storage',
+      `priority` enum('IMPORTANT','NORMAL','LOW') NOT NULL DEFAULT 'NORMAL',
+      `is_bookmarked` tinyint(1) NOT NULL DEFAULT 0,
+      `is_saved` tinyint(1) NOT NULL DEFAULT 0,
+      `total_pages` int(11) NOT NULL DEFAULT 1,
+      `content_text` longtext DEFAULT NULL,
+      `last_accessed` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+      `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+      PRIMARY KEY (`id`),
+      KEY `idx_documents_user` (`user_id`),
+      KEY `idx_documents_priority` (`priority`),
+      KEY `idx_documents_format` (`format`),
+      KEY `idx_documents_saved` (`is_saved`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+");
+
+$input = getJsonInput();
+
+$title = trim($input["title"] ?? $_POST["title"] ?? "");
+$priority = strtoupper(trim($input["priority"] ?? $_POST["priority"] ?? "NORMAL"));
+if (!in_array($priority, ["IMPORTANT", "NORMAL", "LOW"])) {
+    $priority = "NORMAL";
+}
+
+$category = trim($input["category"] ?? $_POST["category"] ?? "General");
+$location = trim($input["location"] ?? $_POST["location"] ?? "Internal Storage");
+$contentText = trim($input["content_text"] ?? $_POST["content_text"] ?? "");
+$format = strtoupper(trim($input["format"] ?? $_POST["format"] ?? "PDF"));
+$fileSize = trim($input["file_size"] ?? $_POST["file_size"] ?? "1.0 MB");
+$totalPages = intval($input["total_pages"] ?? $_POST["total_pages"] ?? 1);
+if ($totalPages <= 0) $totalPages = 1;
+
+$savedRelativePath = null;
+
+// Handle physical file upload if provided
+if (isset($_FILES["document_file"]) && $_FILES["document_file"]["error"] === UPLOAD_ERR_OK) {
+    $file = $_FILES["document_file"];
+    $originalName = basename($file["name"]);
+    if ($title === "") {
+        $title = $originalName;
+    }
+
+    $ext = strtoupper(pathinfo($originalName, PATHINFO_EXTENSION));
+    if ($ext !== "") {
+        $format = $ext;
+    }
+
+    // Format human-readable file size
+    $bytes = $file["size"];
+    if ($bytes >= 1048576) {
+        $fileSize = number_format($bytes / 1048576, 1) . " MB";
+    } elseif ($bytes >= 1024) {
+        $fileSize = number_format($bytes / 1024, 1) . " KB";
+    } else {
+        $fileSize = $bytes . " B";
+    }
+
+    $targetDir = __DIR__ . "/../uploads/documents/";
+    if (!is_dir($targetDir)) {
+        mkdir($targetDir, 0755, true);
+    }
+
+    $uniqueName = bin2hex(random_bytes(12)) . "_" . preg_replace("/[^a-zA-Z0-9._-]/", "", $originalName);
+    $targetPath = $targetDir . $uniqueName;
+
+    if (move_uploaded_file($file["tmp_name"], $targetPath)) {
+        $savedRelativePath = "uploads/documents/" . $uniqueName;
+
+        // If it's a plain text or markdown file, read content for AI
+        if (in_array(strtolower($ext), ["txt", "md", "csv", "json"])) {
+            $extracted = @file_get_contents($targetPath);
+            if (!empty($extracted) && empty($contentText)) {
+                $contentText = mb_substr($extracted, 0, 50000);
+            }
+        }
+    }
+}
+
+if ($title === "") {
+    sendJsonResponse(400, [
+        "success" => false,
+        "message" => "Document title or file is required."
+    ]);
+}
+
+try {
+    $stmt = $conn->prepare("
+        INSERT INTO documents (user_id, title, format, file_size, file_path, category, location, priority, total_pages, content_text)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ");
+
+    $stmt->bind_param("isssssssis", $userId, $title, $format, $fileSize, $savedRelativePath, $category, $location, $priority, $totalPages, $contentText);
+    $stmt->execute();
+    $newDocId = $conn->insert_id;
+    $stmt->close();
+
+    $fileUrl = $savedRelativePath ? (getBaseUrl() . $savedRelativePath) : null;
+
+    sendJsonResponse(201, [
+        "success" => true,
+        "message" => "Document uploaded successfully.",
+        "document" => [
+            "id" => $newDocId,
+            "user_id" => $userId,
+            "title" => $title,
+            "format" => $format,
+            "file_size" => $fileSize,
+            "file_url" => $fileUrl,
+            "file_path" => $savedRelativePath,
+            "category" => $category,
+            "location" => $location,
+            "priority" => $priority,
+            "total_pages" => $totalPages,
+            "created_at" => date("Y-m-d H:i:s")
+        ]
+    ]);
+
+} catch (mysqli_sql_exception $e) {
+    error_log($e->getMessage());
+    sendJsonResponse(500, [
+        "success" => false,
+        "message" => "Failed to save document. Please try again."
+    ]);
+}
+

@@ -1,0 +1,13 @@
+$kind: http-request
+url: http://localhost/intellifile_backend/auth/upload_profile.php
+method: POST
+body:
+  type: formdata
+  content:
+    - type: text
+      key: email
+      value: john@example.com
+    - type: file
+      key: profile_image
+      src: []
+order: 4000
