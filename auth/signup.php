@@ -56,7 +56,6 @@ if ($full_name === "" || $email === "" || $password === "") {
 
     exit;
 }
-
 // Validate full name
 if (strlen($full_name) > 100) {
     http_response_code(400);
