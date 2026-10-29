@@ -20,9 +20,14 @@ if ($_SERVER["REQUEST_METHOD"] !== "GET") {
 }
 
 require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/auth_helper.php";
 
 $userId = intval($_GET["user_id"] ?? $_GET["id"] ?? 0);
 $email = trim($_GET["email"] ?? "");
+
+if ($userId <= 0 && $email === "") {
+    $userId = getAuthenticatedUserId($conn) ?? 0;
+}
 
 if ($userId <= 0 && $email === "") {
     http_response_code(400);

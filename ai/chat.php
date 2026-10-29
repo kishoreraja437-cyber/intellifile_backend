@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . "/../config/auth_helper.php";
+require_once __DIR__ . "/../config/ai_helper.php";
 
 handleCorsPreflight();
 
@@ -136,33 +137,44 @@ try {
     }
 
     $aiResponseText = "";
-    if ($category === "ANALYSIS") {
-        if (!empty($matchedDocs)) {
-            $primaryDoc = $matchedDocs[0];
-            $docTitle = $primaryDoc["title"];
-            $contentSample = !empty($primaryDoc["content_text"]) ? $primaryDoc["content_text"] : "No text extracted yet.";
-            
-            $aiResponseText = "Here is the AI analysis for '{$docTitle}':\n" .
-                "• Document Type: {$primaryDoc['format']} ({$primaryDoc['total_pages']} pages, {$primaryDoc['file_size']})\n" .
-                "• Category & Priority: {$primaryDoc['category']} (Priority: {$primaryDoc['priority']})\n" .
-                "• Key Summary: " . (strlen($contentSample) > 200 ? mb_substr($contentSample, 0, 200) . "..." : $contentSample);
-        } else {
-            $aiResponseText = "I reviewed your repository, but could not find a specific document to analyze. Please upload or specify a file name.";
-        }
-    } elseif ($category === "SEARCH") {
-        $count = count($matchedDocs);
-        if ($count > 0) {
-            $aiResponseText = "I found {$count} file" . ($count > 1 ? "s" : "") . " matching your request '{$prompt}'.";
-        } else {
-            $aiResponseText = "No documents found matching '{$prompt}'. Try checking spelling or searching by category.";
+
+    // 2. Local Python AI Document Q&A & Semantic Extraction
+    $qaResponse = aiPerformDocumentQA($prompt, $matchedDocs);
+    if (!empty($qaResponse["answer"])) {
+        $aiResponseText = $qaResponse["answer"];
+        if (!empty($qaResponse["category"]) && $category === "GENERAL") {
+            $category = $qaResponse["category"];
         }
     } else {
-        // GENERAL
-        if (!empty($matchedDocs)) {
-            $docNames = implode(", ", array_slice(array_column($matchedDocs, "title"), 0, 3));
-            $aiResponseText = "Based on your stored documents ({$docNames}), here is what I found regarding '{$prompt}'. Let me know if you would like me to summarize or prioritize them.";
+        // Graceful heuristic fallback if microservice is offline
+        if ($category === "ANALYSIS") {
+            if (!empty($matchedDocs)) {
+                $primaryDoc = $matchedDocs[0];
+                $docTitle = $primaryDoc["title"];
+                $contentSample = !empty($primaryDoc["content_text"]) ? $primaryDoc["content_text"] : "No text extracted yet.";
+                
+                $aiResponseText = "Here is the AI analysis for '{$docTitle}':\n" .
+                    "• Document Type: {$primaryDoc['format']} ({$primaryDoc['total_pages']} pages, {$primaryDoc['file_size']})\n" .
+                    "• Category & Priority: {$primaryDoc['category']} (Priority: {$primaryDoc['priority']})\n" .
+                    "• Key Summary: " . (strlen($contentSample) > 200 ? mb_substr($contentSample, 0, 200) . "..." : $contentSample);
+            } else {
+                $aiResponseText = "I reviewed your repository, but could not find a specific document to analyze. Please upload or specify a file name.";
+            }
+        } elseif ($category === "SEARCH") {
+            $count = count($matchedDocs);
+            if ($count > 0) {
+                $aiResponseText = "I found {$count} file" . ($count > 1 ? "s" : "") . " matching your request '{$prompt}'.";
+            } else {
+                $aiResponseText = "No documents found matching '{$prompt}'. Try checking spelling or searching by category.";
+            }
         } else {
-            $aiResponseText = "Hello! I am your IntelliFile AI Assistant. You can ask me to search, summarize, analyze, or organize your documents anytime.";
+            // GENERAL
+            if (!empty($matchedDocs)) {
+                $docNames = implode(", ", array_slice(array_column($matchedDocs, "title"), 0, 3));
+                $aiResponseText = "Based on your stored documents ({$docNames}), here is what I found regarding '{$prompt}'. Let me know if you would like me to summarize or prioritize them.";
+            } else {
+                $aiResponseText = "Hello! I am your IntelliFile AI Assistant. You can ask me to search, summarize, analyze, or organize your documents anytime.";
+            }
         }
     }
 

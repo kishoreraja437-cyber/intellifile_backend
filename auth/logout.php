@@ -23,6 +23,18 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     exit;
 }
 
+require_once __DIR__ . "/../config/auth_helper.php";
+
+$userId = getAuthenticatedUserId($conn);
+if ($userId) {
+    $stmt = $conn->prepare("UPDATE users SET auth_token = NULL WHERE id = ?");
+    if ($stmt) {
+        $stmt->bind_param("i", $userId);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
 // Clear all session data
 $_SESSION = [];
 if (ini_get("session.use_cookies")) {

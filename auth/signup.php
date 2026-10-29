@@ -131,11 +131,21 @@ try {
         // Continue even if settings table not created yet
     }
 
+    // Generate secure authentication session token
+    $authToken = bin2hex(random_bytes(32));
+    $updateTokenStmt = $conn->prepare("UPDATE users SET auth_token = ?, token_expires_at = DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE id = ?");
+    if ($updateTokenStmt) {
+        $updateTokenStmt->bind_param("si", $authToken, $newUserId);
+        $updateTokenStmt->execute();
+        $updateTokenStmt->close();
+    }
+
     // Signup successful
     http_response_code(201);
     echo json_encode([
         "success" => true,
         "message" => "Account created successfully",
+        "token" => $authToken,
         "user" => [
             "id" => (int) $newUserId,
             "full_name" => $full_name,

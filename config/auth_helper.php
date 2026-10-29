@@ -56,43 +56,53 @@ function getJsonInput(): array {
 }
 
 /**
- * Authenticates user through Session, Header, or Request parameter.
+ * Authenticates user through secure Session-Token / Bearer Token.
+ * Validates ownership and ensures unauthorized users cannot access resources.
  * Returns valid user ID as integer, or null if unauthenticated.
  */
 function getAuthenticatedUserId(mysqli $conn): ?int {
-    // 1. Session-based authentication
-    if (!empty($_SESSION["user_id"])) {
-        return (int) $_SESSION["user_id"];
-    }
+    $allHeaders = function_exists("getallheaders") ? getallheaders() : [];
 
-    // 2. Custom header (e.g. X-User-Id)
-    if (!empty($_SERVER["HTTP_X_USER_ID"])) {
-        $headerUserId = intval($_SERVER["HTTP_X_USER_ID"]);
-        if ($headerUserId > 0) {
-            return $headerUserId;
-        }
-    }
+    // 1. Check Authorization: Bearer <token>
+    $authHeader = $allHeaders["Authorization"] ?? $allHeaders["authorization"] ?? $_SERVER["HTTP_AUTHORIZATION"] ?? $_SERVER["REDIRECT_HTTP_AUTHORIZATION"] ?? "";
+    if (!empty($authHeader) && preg_match('/Bearer\s+(\S+)/i', $authHeader, $matches)) {
+        $token = trim($matches[1]);
+        if (!empty($token)) {
+            $stmt = $conn->prepare("SELECT id FROM users WHERE auth_token = ? AND (token_expires_at IS NULL OR token_expires_at > NOW()) LIMIT 1");
+            if ($stmt) {
+                $stmt->bind_param("s", $token);
+                $stmt->execute();
+                $res = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if ($res) {
+                    $authenticatedId = (int) $res["id"];
 
-    // 3. Request payload or query parameter
-    $input = getJsonInput();
-    $userId = intval($input["user_id"] ?? $input["id"] ?? $_GET["user_id"] ?? $_GET["id"] ?? 0);
-    if ($userId > 0) {
-        return $userId;
-    }
+                    // Validate ownership: If client also explicitly passed X-User-Id or user_id in payload, ensure it matches!
+                    $requestedId = 0;
+                    $xUserId = $allHeaders["X-User-Id"] ?? $allHeaders["x-user-id"] ?? $_SERVER["HTTP_X_USER_ID"] ?? "";
+                    if (!empty($xUserId)) {
+                        $requestedId = intval($xUserId);
+                    } else {
+                        $input = getJsonInput();
+                        $requestedId = intval($input["user_id"] ?? $input["id"] ?? $_GET["user_id"] ?? $_GET["id"] ?? 0);
+                    }
 
-    // 4. Lookup by email if email is provided in session or request
-    $email = trim($_SESSION["email"] ?? $input["email"] ?? $_GET["email"] ?? "");
-    if ($email !== "" && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ? LIMIT 1");
-        if ($stmt) {
-            $stmt->bind_param("s", $email);
-            $stmt->execute();
-            $res = $stmt->get_result()->fetch_assoc();
-            $stmt->close();
-            if ($res) {
-                return (int) $res["id"];
+                    if ($requestedId > 0 && $requestedId !== $authenticatedId) {
+                        sendJsonResponse(403, [
+                            "success" => false,
+                            "message" => "Forbidden: You do not have permission to access another user's resources."
+                        ]);
+                    }
+
+                    return $authenticatedId;
+                }
             }
         }
+    }
+
+    // 2. Session-based authentication
+    if (!empty($_SESSION["user_id"])) {
+        return (int) $_SESSION["user_id"];
     }
 
     return null;

@@ -1,6 +1,8 @@
 <?php
 
 require_once __DIR__ . "/../config/auth_helper.php";
+require_once __DIR__ . "/../config/ai_helper.php";
+require_once __DIR__ . "/../config/text_extractor.php";
 
 handleCorsPreflight();
 
@@ -57,9 +59,33 @@ if ($totalPages <= 0) $totalPages = 1;
 
 $savedRelativePath = null;
 
+$extractionWarning = null;
+
 // Handle physical file upload if provided
-if (isset($_FILES["document_file"]) && $_FILES["document_file"]["error"] === UPLOAD_ERR_OK) {
+if (isset($_FILES["document_file"])) {
     $file = $_FILES["document_file"];
+
+    if ($file["error"] === UPLOAD_ERR_INI_SIZE || $file["error"] === UPLOAD_ERR_FORM_SIZE || $file["size"] > MAX_DOCUMENT_FILE_SIZE) {
+        sendJsonResponse(413, [
+            "success" => false,
+            "message" => "File size exceeds the permitted limit of 25 MB."
+        ]);
+    }
+
+    if ($file["error"] !== UPLOAD_ERR_OK) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "File upload failed with error code: " . $file["error"]
+        ]);
+    }
+
+    if ($file["size"] === 0) {
+        sendJsonResponse(400, [
+            "success" => false,
+            "message" => "Uploaded file is completely empty (0 bytes)."
+        ]);
+    }
+
     $originalName = basename($file["name"]);
     if ($title === "") {
         $title = $originalName;
@@ -91,13 +117,41 @@ if (isset($_FILES["document_file"]) && $_FILES["document_file"]["error"] === UPL
     if (move_uploaded_file($file["tmp_name"], $targetPath)) {
         $savedRelativePath = "uploads/documents/" . $uniqueName;
 
-        // If it's a plain text or markdown file, read content for AI
-        if (in_array(strtolower($ext), ["txt", "md", "csv", "json"])) {
-            $extracted = @file_get_contents($targetPath);
-            if (!empty($extracted) && empty($contentText)) {
-                $contentText = mb_substr($extracted, 0, 50000);
+        // Perform automatic server-side text extraction
+        $extResult = extractDocumentText($targetPath, $ext);
+        
+        if (!$extResult["success"]) {
+            // Delete the unprocessable/corrupted file
+            @unlink($targetPath);
+
+            if (!empty($extResult["is_encrypted"])) {
+                sendJsonResponse(422, [
+                    "success" => false,
+                    "message" => "Upload rejected: The document is password-protected or encrypted. Please remove password protection before uploading."
+                ]);
             }
+
+            sendJsonResponse(400, [
+                "success" => false,
+                "message" => "Upload rejected: " . ($extResult["error"] ?? "Invalid or corrupted document format.")
+            ]);
         }
+
+        // Successfully extracted
+        if (!empty($extResult["text"])) {
+            $contentText = $extResult["text"];
+        }
+        if (!empty($extResult["page_count"])) {
+            $totalPages = $extResult["page_count"];
+        }
+        if (!empty($extResult["warning"])) {
+            $extractionWarning = $extResult["warning"];
+        }
+    } else {
+        sendJsonResponse(500, [
+            "success" => false,
+            "message" => "Failed to store uploaded file on server."
+        ]);
     }
 }
 
@@ -106,6 +160,20 @@ if ($title === "") {
         "success" => false,
         "message" => "Document title or file is required."
     ]);
+}
+
+// AI Smart Auto-Categorization & Priority Scoring
+$hasExplicitCategory = !empty($input["category"]) || !empty($_POST["category"]);
+$hasExplicitPriority = !empty($input["priority"]) || !empty($_POST["priority"]);
+
+if (!$hasExplicitCategory || !$hasExplicitPriority) {
+    $aiPrediction = aiPredictCategoryAndPriority($title, $contentText);
+    if (!$hasExplicitCategory && !empty($aiPrediction["category"])) {
+        $category = $aiPrediction["category"];
+    }
+    if (!$hasExplicitPriority && !empty($aiPrediction["priority"])) {
+        $priority = $aiPrediction["priority"];
+    }
 }
 
 try {
@@ -136,6 +204,8 @@ try {
             "location" => $location,
             "priority" => $priority,
             "total_pages" => $totalPages,
+            "extracted_chars" => mb_strlen($contentText),
+            "extraction_warning" => $extractionWarning,
             "created_at" => date("Y-m-d H:i:s")
         ]
     ]);

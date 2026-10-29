@@ -1,0 +1,417 @@
+{
+	"info": {
+		"_postman_id": "b1849a21-789a-4c99-a1b4-9c8dfb201f99",
+		"name": "IntelliFile - Complete Application APIs",
+		"description": "Comprehensive Postman collection for all IntelliFile backend modules: Auth, Profile, Documents, AI/RAG Search, and Support/Feedback.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Authentication",
+			"item": [
+				{
+					"name": "Sign Up",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"full_name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"password\": \"Password123!\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/auth/signup.php"
+					}
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"kishore@gmail.com\",\n    \"password\": \"Password123!\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/auth/login.php"
+					}
+				},
+				{
+					"name": "Forgot Password",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"kishore@gmail.com\",\n    \"new_password\": \"NewPassword123!\",\n    \"confirm_password\": \"NewPassword123!\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/auth/forgotpassword.php"
+					}
+				},
+				{
+					"name": "Change Password (Logged In)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"kishore@gmail.com\",\n    \"current_password\": \"NewPassword123!\",\n    \"new_password\": \"BrandNewPassword999!\",\n    \"confirm_password\": \"BrandNewPassword999!\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/auth/change_password.php"
+					}
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"url": "http://localhost/intellifile_backend/auth/logout.php"
+					}
+				}
+			]
+		},
+		{
+			"name": "2. Profile & Settings",
+			"item": [
+				{
+					"name": "Get Profile",
+					"request": {
+						"method": "GET",
+						"url": "http://localhost/intellifile_backend/auth/profile.php?id=5"
+					}
+				},
+				{
+					"name": "Edit Profile",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": 5,\n    \"full_name\": \"Kishore Updated\",\n    \"email\": \"kishore@gmail.com\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/auth/edit_profile.php"
+					}
+				},
+				{
+					"name": "Upload Profile Photo",
+					"request": {
+						"method": "POST",
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{"key": "email", "value": "kishore@gmail.com", "type": "text"},
+								{"key": "profile_image", "type": "file", "src": []}
+							]
+						},
+						"url": "http://localhost/intellifile_backend/auth/upload_profile.php"
+					}
+				},
+				{
+					"name": "Remove Profile Photo",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"kishore@gmail.com\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/auth/remove_profile_photo.php"
+					}
+				},
+				{
+					"name": "Get User Settings",
+					"request": {
+						"method": "GET",
+						"url": "http://localhost/intellifile_backend/auth/get_settings.php?user_id=5"
+					}
+				},
+				{
+					"name": "Update User Settings",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": 5,\n    \"theme_mode\": \"DARK\",\n    \"important_alerts\": true,\n    \"deadline_reminders\": false,\n    \"new_doc_alerts\": true,\n    \"quiet_hours\": true\n}"
+						},
+						"url": "http://localhost/intellifile_backend/auth/update_settings.php"
+					}
+				}
+			]
+		},
+		{
+			"name": "3. Documents",
+			"item": [
+				{
+					"name": "Upload Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"AML Assignment.pdf\",\n    \"format\": \"PDF\",\n    \"file_size\": \"2.4 MB\",\n    \"category\": \"Assignment\",\n    \"priority\": \"IMPORTANT\",\n    \"total_pages\": 12,\n    \"content_text\": \"Machine Learning and Neural Networks AML Assignment.\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/documents/upload.php"
+					}
+				},
+				{
+					"name": "List All Documents",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/documents/list.php"
+					}
+				},
+				{
+					"name": "Recent Files",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/documents/recent.php?limit=10"
+					}
+				},
+				{
+					"name": "Document Statistics (Dashboard)",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/documents/statistics.php"
+					}
+				},
+				{
+					"name": "Document Details",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/documents/detail.php?id=1"
+					}
+				},
+				{
+					"name": "Set Priority",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"document_id\": 1,\n    \"priority\": \"IMPORTANT\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/documents/set_priority.php"
+					}
+				},
+				{
+					"name": "Bookmark / Save Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"document_id\": 1,\n    \"is_bookmarked\": true,\n    \"is_saved\": true\n}"
+						},
+						"url": "http://localhost/intellifile_backend/documents/bookmark.php"
+					}
+				},
+				{
+					"name": "List Saved Documents",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/documents/saved.php"
+					}
+				},
+				{
+					"name": "Share Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"document_id\": 1,\n    \"recipient_name\": \"Arul\",\n    \"recipient_email\": \"arul@example.com\",\n    \"permission\": \"View Only\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/documents/share.php"
+					}
+				},
+				{
+					"name": "Delete Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"document_id\": 1\n}"
+						},
+						"url": "http://localhost/intellifile_backend/documents/delete.php"
+					}
+				}
+			]
+		},
+		{
+			"name": "4. AI & RAG Search",
+			"item": [
+				{
+					"name": "AI Document Search",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/ai/search.php?query=AML"
+					}
+				},
+				{
+					"name": "AI Chat (RAG Assistant)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"prompt\": \"Find my AML assignment file\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/ai/chat.php"
+					}
+				},
+				{
+					"name": "AI Predict Category & Priority",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Machine Learning Assignment 2\",\n    \"content_text\": \"Submission due tomorrow urgent deadline gradient descent\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/ai/predict.php"
+					}
+				},
+				{
+					"name": "AI Summarize Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Operating Systems Notes\",\n    \"content_text\": \"Virtual memory allows execution of processes that are not completely in memory. Paging is a memory management scheme that eliminates the need for contiguous allocation of physical memory. Thrashing occurs when a computer spends more time paging than executing.\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/ai/summarize.php"
+					}
+				},
+				{
+					"name": "AI Chat History",
+					"request": {
+						"method": "GET",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/ai/history.php?category=ALL"
+					}
+				},
+				{
+					"name": "Clear AI History",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "X-User-Id", "value": "5"}],
+						"url": "http://localhost/intellifile_backend/ai/clear_history.php"
+					}
+				}
+			]
+		},
+		{
+			"name": "5. Support & Feedback",
+			"item": [
+				{
+					"name": "Submit Feedback",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"rating\": 5,\n    \"category\": \"EXPERIENCE\",\n    \"feedback_text\": \"Love the AI search and auto categorization!\",\n    \"email\": \"kishore@gmail.com\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/support/feedback.php"
+					}
+				},
+				{
+					"name": "Contact Support Message",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Kishore\",\n    \"email\": \"kishore@gmail.com\",\n    \"subject\": \"General Question\",\n    \"message\": \"How can I share files with view-only permissions?\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/support/contact.php"
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Python AI Microservice (Direct Local)",
+			"item": [
+				{
+					"name": "Microservice Health Check",
+					"request": {
+						"method": "GET",
+						"url": "http://127.0.0.1:5000/health"
+					}
+				},
+				{
+					"name": "Direct Auto-Categorization & Priority",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Cloud Computing Assignment 3\",\n    \"content_text\": \"Submission deadline due tomorrow urgent EC2 S3 containerization marks\"\n}"
+						},
+						"url": "http://127.0.0.1:5000/predict_category_priority"
+					}
+				},
+				{
+					"name": "Direct Document Q&A (RAG)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"query\": \"What is thrashing?\",\n    \"documents\": [\n        {\n            \"id\": 10,\n            \"title\": \"Operating Systems Notes\",\n            \"content_text\": \"Virtual memory allows execution of non-contiguous processes. Thrashing occurs when a computer's virtual memory subsystem is in a constant state of paging. This significantly degrades system throughput.\",\n            \"priority\": \"NORMAL\",\n            \"category\": \"Notes\"\n        }\n    ]\n}"
+						},
+						"url": "http://127.0.0.1:5000/document_qa"
+					}
+				},
+				{
+					"name": "Direct Document Summarization",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Operating Systems Notes\",\n    \"content_text\": \"Virtual memory allows execution of processes that are not completely in memory. Paging is a memory management scheme that eliminates the need for contiguous allocation of physical memory. Thrashing occurs when a computer spends more time paging than executing. Page replacement algorithms include FIFO, LRU, and Optimal.\"\n}"
+						},
+						"url": "http://127.0.0.1:5000/summarize"
+					}
+				}
+			]
+		}
+	]
+}
+

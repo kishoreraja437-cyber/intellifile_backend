@@ -1,0 +1,9 @@
+City Health Clinic Dr. R. Sharma MBBS MD
+Patient Name: Kishore Kumar Age: 24 Gender: Male
+Diagnosis: Acute Bronchitis and Viral Fever
+Rx Medication:
+1. Amoxicillin 500mg - 1 tablet three times daily after food for 5 days
+2. Paracetamol 650mg - 1 tablet as needed for body ache and fever
+3. Levocetirizine 5mg - 1 tablet at night for allergic cough
+Instructions: Drink warm fluids, complete antibiotic course, follow up in 5 days.
+Urgent consultation required if breathing difficulty occurs.

@@ -20,10 +20,15 @@ if ($_SERVER["REQUEST_METHOD"] !== "GET") {
 }
 
 require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/auth_helper.php";
 
-// Accept lookup via email or user_id / id
+// Accept lookup via email or user_id / id, falling back to authenticated session or Bearer token
 $email = trim($_GET["email"] ?? "");
 $userId = intval($_GET["user_id"] ?? $_GET["id"] ?? 0);
+
+if ($userId <= 0 && $email === "") {
+    $userId = getAuthenticatedUserId($conn) ?? 0;
+}
 
 if ($email === "" && $userId <= 0) {
     http_response_code(400);

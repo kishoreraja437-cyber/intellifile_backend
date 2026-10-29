@@ -107,6 +107,15 @@ try {
             }
         }
 
+        // Generate secure authentication session token
+        $authToken = bin2hex(random_bytes(32));
+        $updateTokenStmt = $conn->prepare("UPDATE users SET auth_token = ?, token_expires_at = DATE_ADD(NOW(), INTERVAL 30 DAY) WHERE id = ?");
+        if ($updateTokenStmt) {
+            $updateTokenStmt->bind_param("si", $authToken, $user["id"]);
+            $updateTokenStmt->execute();
+            $updateTokenStmt->close();
+        }
+
         // Save authenticated user to session
         $_SESSION["user_id"] = (int) $user["id"];
         $_SESSION["email"] = $user["email"];
@@ -115,6 +124,7 @@ try {
         echo json_encode([
             "success" => true,
             "message" => "Login successful",
+            "token" => $authToken,
             "user" => [
                 "id" => (int) $user["id"],
                 "full_name" => $user["full_name"],

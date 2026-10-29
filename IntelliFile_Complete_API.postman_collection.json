@@ -282,6 +282,36 @@
 					}
 				},
 				{
+					"name": "AI Predict Category & Priority",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Machine Learning Assignment 2\",\n    \"content_text\": \"Submission due tomorrow urgent deadline gradient descent\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/ai/predict.php"
+					}
+				},
+				{
+					"name": "AI Summarize Document",
+					"request": {
+						"method": "POST",
+						"header": [
+							{"key": "Content-Type", "value": "application/json"},
+							{"key": "X-User-Id", "value": "5"}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Operating Systems Notes\",\n    \"content_text\": \"Virtual memory allows execution of processes that are not completely in memory. Paging is a memory management scheme that eliminates the need for contiguous allocation of physical memory. Thrashing occurs when a computer spends more time paging than executing.\"\n}"
+						},
+						"url": "http://localhost/intellifile_backend/ai/summarize.php"
+					}
+				},
+				{
 					"name": "AI Chat History",
 					"request": {
 						"method": "GET",
@@ -330,6 +360,54 @@
 							"raw": "{\n    \"name\": \"Kishore\",\n    \"email\": \"kishore@gmail.com\",\n    \"subject\": \"General Question\",\n    \"message\": \"How can I share files with view-only permissions?\"\n}"
 						},
 						"url": "http://localhost/intellifile_backend/support/contact.php"
+					}
+				}
+			]
+		},
+		{
+			"name": "6. Python AI Microservice (Direct Local)",
+			"item": [
+				{
+					"name": "Microservice Health Check",
+					"request": {
+						"method": "GET",
+						"url": "http://127.0.0.1:5000/health"
+					}
+				},
+				{
+					"name": "Direct Auto-Categorization & Priority",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Cloud Computing Assignment 3\",\n    \"content_text\": \"Submission deadline due tomorrow urgent EC2 S3 containerization marks\"\n}"
+						},
+						"url": "http://127.0.0.1:5000/predict_category_priority"
+					}
+				},
+				{
+					"name": "Direct Document Q&A (RAG)",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"query\": \"What is thrashing?\",\n    \"documents\": [\n        {\n            \"id\": 10,\n            \"title\": \"Operating Systems Notes\",\n            \"content_text\": \"Virtual memory allows execution of non-contiguous processes. Thrashing occurs when a computer's virtual memory subsystem is in a constant state of paging. This significantly degrades system throughput.\",\n            \"priority\": \"NORMAL\",\n            \"category\": \"Notes\"\n        }\n    ]\n}"
+						},
+						"url": "http://127.0.0.1:5000/document_qa"
+					}
+				},
+				{
+					"name": "Direct Document Summarization",
+					"request": {
+						"method": "POST",
+						"header": [{"key": "Content-Type", "value": "application/json"}],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Operating Systems Notes\",\n    \"content_text\": \"Virtual memory allows execution of processes that are not completely in memory. Paging is a memory management scheme that eliminates the need for contiguous allocation of physical memory. Thrashing occurs when a computer spends more time paging than executing. Page replacement algorithms include FIFO, LRU, and Optimal.\"\n}"
+						},
+						"url": "http://127.0.0.1:5000/summarize"
 					}
 				}
 			]

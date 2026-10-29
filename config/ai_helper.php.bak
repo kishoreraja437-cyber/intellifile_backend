@@ -1,0 +1,141 @@
+<?php
+
+/**
+ * IntelliFile AI Microservice Bridge
+ * Connects PHP backend to local Python AI service on http://127.0.0.1:5000
+ */
+
+define("AI_SERVICE_URL", "http://127.0.0.1:5000");
+
+/**
+ * Sends an HTTP POST request to local Python AI microservice.
+ * Returns decoded associative array, or null if service is offline.
+ */
+function callPythonAiService(string $endpoint, array $payload, int $timeoutSeconds = 3): ?array {
+    $url = rtrim(AI_SERVICE_URL, "/") . "/" . ltrim($endpoint, "/");
+    $jsonData = json_encode($payload);
+
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $jsonData,
+        CURLOPT_HTTPHEADER     => [
+            "Content-Type: application/json",
+            "Content-Length: " . strlen($jsonData)
+        ],
+        CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_TIMEOUT        => $timeoutSeconds,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error = curl_error($ch);
+    curl_close($ch);
+
+    if ($response === false || $httpCode < 200 || $httpCode >= 300) {
+        error_log("[AI BRIDGE] Failed connecting to {$url}: {$error} (HTTP {$httpCode})");
+        return null;
+    }
+
+    $decoded = json_decode($response, true);
+    return is_array($decoded) ? $decoded : null;
+}
+
+/**
+ * Predicts category and priority for a document using local Python ML model
+ */
+function aiPredictCategoryAndPriority(string $title, string $contentText): array {
+    $res = callPythonAiService("predict_category_priority", [
+        "title" => $title,
+        "content_text" => $contentText
+    ]);
+
+    if ($res && !empty($res["success"])) {
+        return [
+            "category" => $res["category"] ?? "General",
+            "priority" => $res["priority"] ?? "NORMAL",
+            "confidence" => $res["category_confidence"] ?? 0.8,
+            "source" => "python_ml"
+        ];
+    }
+
+    // Heuristic fallback if Python service is offline
+    $lower = strtolower($title . " " . $contentText);
+    $category = "General";
+    if (str_contains($lower, "assignment") || str_contains($lower, "homework") || str_contains($lower, "lab record")) {
+        $category = "Assignment";
+    } elseif (str_contains($lower, "notes") || str_contains($lower, "study guide") || str_contains($lower, "lecture")) {
+        $category = "Notes";
+    } elseif (str_contains($lower, "project") || str_contains($lower, "report") || str_contains($lower, "thesis")) {
+        $category = "Project Report";
+    } elseif (str_contains($lower, "resume") || str_contains($lower, "cv") || str_contains($lower, "curriculum vitae")) {
+        $category = "Resume";
+    } elseif (str_contains($lower, "paper") || str_contains($lower, "ieee") || str_contains($lower, "journal")) {
+        $category = "Research Paper";
+    }
+
+    $priority = "NORMAL";
+    if (str_contains($lower, "urgent") || str_contains($lower, "due tomorrow") || str_contains($lower, "exam") || str_contains($lower, "deadline")) {
+        $priority = "IMPORTANT";
+    } elseif (str_contains($lower, "reference") || str_contains($lower, "archive") || str_contains($lower, "optional")) {
+        $priority = "LOW";
+    }
+
+    return [
+        "category" => $category,
+        "priority" => $priority,
+        "confidence" => 0.6,
+        "source" => "heuristic_fallback"
+    ];
+}
+
+/**
+ * Performs local RAG / Extractive QA across documents using Python QA engine
+ */
+function aiPerformDocumentQA(string $query, array $documents): array {
+    $res = callPythonAiService("document_qa", [
+        "query" => $query,
+        "documents" => $documents
+    ], 5);
+
+    if ($res && !empty($res["success"])) {
+        return [
+            "answer" => $res["answer"],
+            "category" => $res["category"] ?? "GENERAL",
+            "matched_files" => $res["matched_files"] ?? [],
+            "source" => "python_nlp"
+        ];
+    }
+
+    return [
+        "answer" => null,
+        "category" => "GENERAL",
+        "matched_files" => [],
+        "source" => "fallback"
+    ];
+}
+
+/**
+ * Summarizes document text into key points using Python AI Microservice
+ */
+function aiSummarizeDocument(string $title, string $contentText): array {
+    $res = callPythonAiService("summarize", [
+        "title" => $title,
+        "content_text" => $contentText
+    ], 5);
+
+    if ($res && !empty($res["success"])) {
+        return $res;
+    }
+
+    return [
+        "success" => true,
+        "title" => $title,
+        "summary" => mb_substr($contentText, 0, 300) . (strlen($contentText) > 300 ? "..." : ""),
+        "bullet_points" => [],
+        "source" => "fallback"
+    ];
+}
