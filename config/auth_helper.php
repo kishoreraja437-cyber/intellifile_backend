@@ -64,7 +64,17 @@ function getAuthenticatedUserId(mysqli $conn): ?int {
     $allHeaders = function_exists("getallheaders") ? getallheaders() : [];
 
     // 1. Check Authorization: Bearer <token>
-    $authHeader = $allHeaders["Authorization"] ?? $allHeaders["authorization"] ?? $_SERVER["HTTP_AUTHORIZATION"] ?? $_SERVER["REDIRECT_HTTP_AUTHORIZATION"] ?? "";
+    $apacheHeaders = function_exists("apache_request_headers") ? apache_request_headers() : [];
+    $authHeader = $allHeaders["Authorization"] 
+        ?? $allHeaders["authorization"] 
+        ?? $apacheHeaders["Authorization"] 
+        ?? $apacheHeaders["authorization"] 
+        ?? $allHeaders["X-Authorization"] 
+        ?? $allHeaders["x-authorization"] 
+        ?? $_SERVER["HTTP_AUTHORIZATION"] 
+        ?? $_SERVER["REDIRECT_HTTP_AUTHORIZATION"] 
+        ?? $_SERVER["HTTP_X_AUTHORIZATION"] 
+        ?? "";
     if (!empty($authHeader) && preg_match('/Bearer\s+(\S+)/i', $authHeader, $matches)) {
         $token = trim($matches[1]);
         if (!empty($token)) {
