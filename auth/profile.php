@@ -73,29 +73,22 @@ try {
     $stmt->close();
 
     if ($user) {
-        $imageUrl = null;
-        if (!empty($user["profile_image"])) {
-            if (filter_var($user["profile_image"], FILTER_VALIDATE_URL)) {
-                $imageUrl = $user["profile_image"];
-            } else {
-                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-                $host = $_SERVER['HTTP_HOST'] ?? "localhost";
-                $imageUrl = $protocol . $host . "/intellifile_backend/" . ltrim($user["profile_image"], "/");
-            }
-        }
+        $imageUrl = resolvePublicImageUrl($user["profile_image"] ?? null);
 
         http_response_code(200);
+        $userData = [
+            "id" => (int) $user["id"],
+            "full_name" => $user["full_name"],
+            "email" => $user["email"],
+            "profile_image" => $imageUrl,
+            "profile_image_path" => $user["profile_image"],
+            "created_at" => $user["created_at"]
+        ];
         echo json_encode([
             "success" => true,
             "message" => "Profile fetched successfully.",
-            "profile" => [
-                "id" => (int) $user["id"],
-                "full_name" => $user["full_name"],
-                "email" => $user["email"],
-                "profile_image" => $imageUrl,
-                "profile_image_path" => $user["profile_image"],
-                "created_at" => $user["created_at"]
-            ]
+            "user" => $userData,
+            "profile" => $userData
         ]);
     } else {
         http_response_code(404);

@@ -20,6 +20,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST" && $_SERVER["REQUEST_METHOD"] !== "DEL
 }
 
 require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/auth_helper.php";
 
 // Read JSON input or POST form data
 $rawInput = file_get_contents("php://input");
@@ -29,14 +30,14 @@ if (!is_array($data)) {
     $data = $_POST;
 }
 
-$email = trim($data["email"] ?? "");
-$userId = intval($data["user_id"] ?? $data["id"] ?? 0);
+$userId = intval($data["user_id"] ?? $data["id"] ?? getAuthenticatedUserId($conn) ?? 0);
+$email = strtolower(trim($data["email"] ?? ""));
 
 if ($email === "" && $userId <= 0) {
     http_response_code(400);
     echo json_encode([
         "success" => false,
-        "message" => "Please provide user_id or email."
+        "message" => "Please provide user_id or email, or authenticate with session token."
     ]);
     exit;
 }

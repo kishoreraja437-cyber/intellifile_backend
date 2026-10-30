@@ -24,6 +24,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/auth_helper.php";
 
 // Read JSON request
 $data = json_decode(file_get_contents("php://input"), true);
@@ -95,17 +96,7 @@ try {
     }
 
     if ($passwordValid) {
-        // Build image URL dynamically based on requesting host
-        $imageUrl = null;
-        if (!empty($user["profile_image"])) {
-            if (filter_var($user["profile_image"], FILTER_VALIDATE_URL)) {
-                $imageUrl = $user["profile_image"];
-            } else {
-                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-                $host = $_SERVER['HTTP_HOST'] ?? "localhost";
-                $imageUrl = $protocol . $host . "/intellifile_backend/" . ltrim($user["profile_image"], "/");
-            }
-        }
+        $imageUrl = resolvePublicImageUrl($user["profile_image"] ?? null);
 
         // Generate secure authentication session token
         $authToken = bin2hex(random_bytes(32));

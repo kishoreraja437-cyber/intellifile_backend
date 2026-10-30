@@ -20,16 +20,17 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
 }
 
 require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/auth_helper.php";
 
-// Get user identifier via email or user_id
-$email = trim($_POST["email"] ?? "");
-$userId = intval($_POST["user_id"] ?? $_POST["id"] ?? 0);
+// Get user identifier via email, user_id, or Bearer auth token
+$userId = intval($_POST["user_id"] ?? $_POST["id"] ?? getAuthenticatedUserId($conn) ?? 0);
+$email = strtolower(trim($_POST["email"] ?? ""));
 
 if ($email === "" && $userId <= 0) {
     http_response_code(400);
     echo json_encode([
         "success" => false,
-        "message" => "Please provide user email or user_id."
+        "message" => "Please provide user email or user_id, or authenticate with session token."
     ]);
     exit;
 }
@@ -166,15 +167,14 @@ try {
             }
         }
 
-        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-        $host = $_SERVER['HTTP_HOST'] ?? "localhost";
-        $fullImageUrl = $protocol . $host . "/intellifile_backend/" . $newRelativePath;
+        $fullImageUrl = resolvePublicImageUrl($newRelativePath);
 
         http_response_code(200);
         echo json_encode([
             "success" => true,
             "message" => "Profile image uploaded successfully.",
             "profile_image" => $fullImageUrl,
+            "profile_image_url" => $fullImageUrl,
             "profile_image_path" => $newRelativePath
         ]);
 

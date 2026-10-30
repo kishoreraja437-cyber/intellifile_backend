@@ -35,7 +35,7 @@ if (!is_array($data)) {
 
 $email = trim($data["email"] ?? "");
 $new_password = $data["new_password"] ?? $data["password"] ?? "";
-$confirm_password = $data["confirm_password"] ?? "";
+$confirm_password = $data["confirm_password"] ?? $new_password;
 
 // Validate email
 if ($email === "" || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -57,16 +57,6 @@ if (strlen($new_password) < 8) {
     exit;
 }
 
-// Check password confirmation
-if ($confirm_password === "") {
-    http_response_code(400);
-    echo json_encode([
-        "success" => false,
-        "message" => "Please confirm your new password."
-    ]);
-    exit;
-}
-
 if ($new_password !== $confirm_password) {
     http_response_code(400);
     echo json_encode([
@@ -77,9 +67,9 @@ if ($new_password !== $confirm_password) {
 }
 
 try {
-    // Check whether the email exists
+    // Check whether the email exists (case-insensitive)
     $stmt = $conn->prepare(
-        "SELECT id FROM users WHERE email = ? LIMIT 1"
+        "SELECT id FROM users WHERE LOWER(TRIM(email)) = LOWER(?) LIMIT 1"
     );
 
     $stmt->bind_param("s", $email);

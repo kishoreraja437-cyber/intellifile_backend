@@ -8,12 +8,57 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once __DIR__ . "/db.php";
 
 /**
- * Returns dynamic base URL for this server (handles localhost, 10.0.2.2 for Android emulators, LAN IPs)
+ * Returns dynamic base URL for this server (handles devtunnels, public proxies, localhost)
  */
 function getBaseUrl(): string {
-    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-    $host = $_SERVER['HTTP_HOST'] ?? "localhost";
+    $host = $_SERVER['HTTP_X_FORWARDED_HOST'] 
+        ?? $_SERVER['HTTP_HOST'] 
+        ?? "localhost";
+
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+        || (!empty($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https')
+        || (strpos($host, 'devtunnels.ms') !== false)
+        ? "https://" : "http://";
+
+    if (strpos($host, 'localhost') !== false || strpos($host, '127.0.0.1') !== false) {
+        $host = "tn89blc0-80.inc1.devtunnels.ms";
+        $protocol = "https://";
+    }
+
     return $protocol . $host . "/intellifile_backend/";
+}
+
+/**
+ * Resolves a stored database profile_image path into a publicly accessible absolute URL.
+ */
+function resolvePublicImageUrl(?string $rawPath): ?string {
+    if (empty($rawPath)) {
+        return null;
+    }
+
+    $rawPath = trim($rawPath);
+    if ($rawPath === "") {
+        return null;
+    }
+
+    // If it's already an absolute URL but points to localhost / 127.0.0.1, extract relative path
+    if (filter_var($rawPath, FILTER_VALIDATE_URL)) {
+        if (strpos($rawPath, 'localhost') !== false || strpos($rawPath, '127.0.0.1') !== false || strpos($rawPath, '10.0.2.2') !== false) {
+            $parsed = parse_url($rawPath);
+            $pathOnly = $parsed['path'] ?? '';
+            $pathOnly = preg_replace('#^/?intellifile_backend/#', '', $pathOnly);
+            $rawPath = ltrim($pathOnly, '/');
+        } else {
+            return $rawPath;
+        }
+    }
+
+    $cleanPath = ltrim($rawPath, "/\\");
+    if (!str_starts_with($cleanPath, "uploads/") && !str_starts_with($cleanPath, "intellifile_backend/")) {
+        $cleanPath = "uploads/" . $cleanPath;
+    }
+
+    return getBaseUrl() . $cleanPath;
 }
 
 /**

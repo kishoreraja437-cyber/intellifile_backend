@@ -21,11 +21,16 @@ if ($_SERVER["REQUEST_METHOD"] !== "PUT" && $_SERVER["REQUEST_METHOD"] !== "POST
 }
 
 require_once __DIR__ . "/../config/db.php";
+require_once __DIR__ . "/../config/auth_helper.php";
 
 // Read JSON request body
 $data = json_decode(file_get_contents("php://input"), true);
 
 if (!is_array($data)) {
+    $data = $_POST;
+}
+
+if (!is_array($data) || empty($data)) {
     http_response_code(400);
     echo json_encode([
         "success" => false,
@@ -34,9 +39,9 @@ if (!is_array($data)) {
     exit;
 }
 
-// User identifier: user_id OR current_email
-$userId = intval($data["user_id"] ?? $data["id"] ?? 0);
-$currentEmail = trim($data["current_email"] ?? "");
+// User identifier: user_id OR current_email OR authenticated token
+$userId = intval($data["user_id"] ?? $data["id"] ?? getAuthenticatedUserId($conn) ?? 0);
+$currentEmail = strtolower(trim($data["current_email"] ?? ""));
 
 // Updated profile values
 $fullName = trim($data["full_name"] ?? $data["name"] ?? "");
@@ -125,28 +130,21 @@ try {
     $updateStmt->close();
 
     // Prepare profile image URL
-    $imageUrl = null;
-    if (!empty($user["profile_image"])) {
-        if (filter_var($user["profile_image"], FILTER_VALIDATE_URL)) {
-            $imageUrl = $user["profile_image"];
-        } else {
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? "https://" : "http://";
-            $host = $_SERVER['HTTP_HOST'] ?? "localhost";
-            $imageUrl = $protocol . $host . "/intellifile_backend/" . ltrim($user["profile_image"], "/");
-        }
-    }
+    $imageUrl = resolvePublicImageUrl($user["profile_image"] ?? null);
 
     http_response_code(200);
+    $userData = [
+        "id" => $targetUserId,
+        "full_name" => $fullName,
+        "email" => $targetEmail,
+        "profile_image" => $imageUrl,
+        "profile_image_path" => $user["profile_image"]
+    ];
     echo json_encode([
         "success" => true,
         "message" => "Profile updated successfully.",
-        "profile" => [
-            "id" => $targetUserId,
-            "full_name" => $fullName,
-            "email" => $targetEmail,
-            "profile_image" => $imageUrl,
-            "profile_image_path" => $user["profile_image"]
-        ]
+        "user" => $userData,
+        "profile" => $userData
     ]);
 
 } catch (mysqli_sql_exception $e) {
