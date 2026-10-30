@@ -37,10 +37,8 @@ if ($formatFilter === "PDF") {
     $sql .= " AND format = 'PDF'";
 } elseif ($formatFilter === "DOC") {
     $sql .= " AND (format = 'DOC' OR format = 'DOCX')";
-} elseif ($formatFilter === "PPT") {
-    $sql .= " AND (format = 'PPT' OR format = 'PPTX')";
 } elseif ($formatFilter === "OTHER") {
-    $sql .= " AND format NOT IN ('PDF', 'DOC', 'DOCX', 'PPT', 'PPTX')";
+    $sql .= " AND format NOT IN ('PDF', 'DOC', 'DOCX')";
 }
 
 $sql .= " ORDER BY last_accessed DESC LIMIT ?";
