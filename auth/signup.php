@@ -140,18 +140,21 @@ try {
         $updateTokenStmt->close();
     }
 
+    $userData = [
+        "id" => (int) $newUserId,
+        "full_name" => $full_name,
+        "email" => $email,
+        "profile_image" => null
+    ];
+
     // Signup successful
     http_response_code(201);
     echo json_encode([
         "success" => true,
         "message" => "Account created successfully",
         "token" => $authToken,
-        "user" => [
-            "id" => (int) $newUserId,
-            "full_name" => $full_name,
-            "email" => $email,
-            "profile_image" => null
-        ]
+        "user" => $userData,
+        "profile" => $userData
     ]);
 
 } catch (mysqli_sql_exception $e) {

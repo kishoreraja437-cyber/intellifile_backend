@@ -39,7 +39,7 @@ if (!is_array($data)) {
 }
 
 // Login fields
-$email = trim($data["email"] ?? "");
+$email = strtolower(trim($data["email"] ?? ""));
 $password = $data["password"] ?? "";
 
 // Validate fields
@@ -62,11 +62,11 @@ if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
 }
 
 try {
-    // Find user by email
+    // Find user by email (case-insensitive)
     $stmt = $conn->prepare(
         "SELECT id, full_name, email, password, profile_image, created_at
          FROM users
-         WHERE email = ?
+         WHERE LOWER(TRIM(email)) = LOWER(?)
          LIMIT 1"
     );
 
@@ -111,19 +111,22 @@ try {
         $_SESSION["user_id"] = (int) $user["id"];
         $_SESSION["email"] = $user["email"];
 
+        $userData = [
+            "id" => (int) $user["id"],
+            "full_name" => $user["full_name"],
+            "email" => $user["email"],
+            "profile_image" => $imageUrl,
+            "profile_image_path" => $user["profile_image"],
+            "created_at" => $user["created_at"]
+        ];
+
         http_response_code(200);
         echo json_encode([
             "success" => true,
             "message" => "Login successful",
             "token" => $authToken,
-            "user" => [
-                "id" => (int) $user["id"],
-                "full_name" => $user["full_name"],
-                "email" => $user["email"],
-                "profile_image" => $imageUrl,
-                "profile_image_path" => $user["profile_image"],
-                "created_at" => $user["created_at"]
-            ]
+            "user" => $userData,
+            "profile" => $userData
         ]);
     } else {
         http_response_code(401);
