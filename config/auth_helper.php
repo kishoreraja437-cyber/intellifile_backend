@@ -160,6 +160,12 @@ function getAuthenticatedUserId(mysqli $conn): ?int {
         return (int) $_SESSION["user_id"];
     }
 
+    // 3. Fallback to direct X-User-Id header or user_id parameter
+    $fallbackId = intval($allHeaders["X-User-Id"] ?? $allHeaders["x-user-id"] ?? $_SERVER["HTTP_X_USER_ID"] ?? $_GET["user_id"] ?? $_POST["user_id"] ?? 0);
+    if ($fallbackId > 0) {
+        return $fallbackId;
+    }
+
     return null;
 }
 

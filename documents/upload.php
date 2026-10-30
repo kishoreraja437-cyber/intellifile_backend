@@ -13,7 +13,14 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     ]);
 }
 
-$userId = requireAuth($conn);
+// Support multiple auth avenues (Session token, X-User-Id, POST/GET user_id)
+$userId = intval($_POST["user_id"] ?? $_GET["user_id"] ?? 0);
+if ($userId <= 0) {
+    $userId = getAuthenticatedUserId($conn) ?? 0;
+}
+if ($userId <= 0) {
+    $userId = requireAuth($conn);
+}
 
 // Auto-create documents table if not exists
 $conn->query("
@@ -58,13 +65,25 @@ $totalPages = intval($input["total_pages"] ?? $_POST["total_pages"] ?? 1);
 if ($totalPages <= 0) $totalPages = 1;
 
 $savedRelativePath = null;
-
 $extractionWarning = null;
 
-// Handle physical file upload if provided
-if (isset($_FILES["document_file"])) {
-    $file = $_FILES["document_file"];
+// Locate uploaded file from any accepted multipart field name
+$file = null;
+foreach (["document", "document_file", "file", "doc"] as $fKey) {
+    if (isset($_FILES[$fKey]) && is_array($_FILES[$fKey]) && !empty($_FILES[$fKey]["name"])) {
+        $file = $_FILES[$fKey];
+        break;
+    }
+}
+if (!$file && !empty($_FILES)) {
+    $firstFile = reset($_FILES);
+    if (is_array($firstFile) && !empty($firstFile["name"])) {
+        $file = $firstFile;
+    }
+}
 
+// Handle physical file upload if provided
+if ($file !== null) {
     if ($file["error"] === UPLOAD_ERR_INI_SIZE || $file["error"] === UPLOAD_ERR_FORM_SIZE || $file["size"] > MAX_DOCUMENT_FILE_SIZE) {
         sendJsonResponse(413, [
             "success" => false,
@@ -121,31 +140,28 @@ if (isset($_FILES["document_file"])) {
         $extResult = extractDocumentText($targetPath, $ext);
         
         if (!$extResult["success"]) {
-            // Delete the unprocessable/corrupted file
-            @unlink($targetPath);
-
             if (!empty($extResult["is_encrypted"])) {
+                @unlink($targetPath);
                 sendJsonResponse(422, [
                     "success" => false,
                     "message" => "Upload rejected: The document is password-protected or encrypted. Please remove password protection before uploading."
                 ]);
             }
 
-            sendJsonResponse(400, [
-                "success" => false,
-                "message" => "Upload rejected: " . ($extResult["error"] ?? "Invalid or corrupted document format.")
-            ]);
-        }
-
-        // Successfully extracted
-        if (!empty($extResult["text"])) {
-            $contentText = $extResult["text"];
-        }
-        if (!empty($extResult["page_count"])) {
-            $totalPages = $extResult["page_count"];
-        }
-        if (!empty($extResult["warning"])) {
-            $extractionWarning = $extResult["warning"];
+            // For non-fatal formats, still preserve file in the vault
+            $contentText = "";
+            $extractionWarning = $extResult["error"] ?? "Text extraction not available for this file.";
+        } else {
+            // Successfully extracted
+            if (!empty($extResult["text"])) {
+                $contentText = $extResult["text"];
+            }
+            if (!empty($extResult["page_count"])) {
+                $totalPages = $extResult["page_count"];
+            }
+            if (!empty($extResult["warning"])) {
+                $extractionWarning = $extResult["warning"];
+            }
         }
     } else {
         sendJsonResponse(500, [
@@ -155,14 +171,14 @@ if (isset($_FILES["document_file"])) {
     }
 }
 
-if ($title === "") {
+if ($title === "" && !$savedRelativePath) {
     sendJsonResponse(400, [
         "success" => false,
         "message" => "Document title or file is required."
     ]);
 }
 
-// AI Smart Auto-Categorization & Priority Scoring
+// AI Smart Auto-Categorization & Priority Scoring if not specified
 $hasExplicitCategory = !empty($input["category"]) || !empty($_POST["category"]);
 $hasExplicitPriority = !empty($input["priority"]) || !empty($_POST["priority"]);
 
@@ -204,6 +220,8 @@ try {
             "location" => $location,
             "priority" => $priority,
             "total_pages" => $totalPages,
+            "has_text" => !empty($contentText),
+            "content_text" => $contentText,
             "extracted_chars" => mb_strlen($contentText),
             "extraction_warning" => $extractionWarning,
             "created_at" => date("Y-m-d H:i:s")
@@ -214,7 +232,6 @@ try {
     error_log($e->getMessage());
     sendJsonResponse(500, [
         "success" => false,
-        "message" => "Failed to save document. Please try again."
+        "message" => "Failed to save document. Please try again: " . $e->getMessage()
     ]);
 }
-
