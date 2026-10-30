@@ -19,7 +19,7 @@ $formatFilter = strtoupper(trim($_GET["format"] ?? "ALL"));
 $categoryFilter = trim($_GET["category"] ?? "");
 $sort = strtolower(trim($_GET["sort"] ?? "recent"));
 
-$sql = "SELECT id, user_id, title, format, file_size, file_path, category, location, priority, is_bookmarked, is_saved, total_pages, last_accessed, created_at 
+$sql = "SELECT id, user_id, title, format, file_size, file_path, category, location, priority, is_bookmarked, is_saved, total_pages, content_text, last_accessed, created_at 
         FROM documents 
         WHERE user_id = ?";
 
@@ -81,11 +81,16 @@ try {
 
     while ($row = $result->fetch_assoc()) {
         $fileUrl = !empty($row["file_path"]) ? ($baseUrl . $row["file_path"]) : null;
+        $contentText = $row["content_text"] ?? "";
+        $hasText = !empty($contentText);
         $documents[] = [
             "id" => (int) $row["id"],
+            "user_id" => (int) $row["user_id"],
             "title" => $row["title"],
             "format" => $row["format"],
             "size" => $row["file_size"],
+            "file_size" => $row["file_size"],
+            "file_path" => $row["file_path"],
             "file_url" => $fileUrl,
             "category" => $row["category"],
             "location" => $row["location"],
@@ -93,6 +98,9 @@ try {
             "is_bookmarked" => (bool) $row["is_bookmarked"],
             "is_saved" => (bool) $row["is_saved"],
             "total_pages" => (int) $row["total_pages"],
+            "content_text" => $contentText,
+            "has_text" => $hasText,
+            "content_text_length" => mb_strlen($contentText),
             "dateText" => date("M j, Y", strtotime($row["last_accessed"])),
             "created_at" => $row["created_at"],
             "last_accessed" => $row["last_accessed"]

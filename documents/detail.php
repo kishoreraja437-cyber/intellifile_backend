@@ -64,7 +64,9 @@ try {
             "isBookmarked" => (bool) $doc["is_bookmarked"],
             "isSaved" => (bool) $doc["is_saved"],
             "totalPages" => (int) $doc["total_pages"],
-            "hasContentText" => !empty($doc["content_text"])
+            "hasContentText" => !empty($doc["content_text"]),
+            "contentText" => $doc["content_text"] ?? "",
+            "content_text" => $doc["content_text"] ?? ""
         ]
     ]);
 
