@@ -33,7 +33,7 @@ $conn->query("
       `file_path` varchar(500) DEFAULT NULL,
       `category` varchar(100) NOT NULL DEFAULT 'General',
       `location` varchar(100) NOT NULL DEFAULT 'Internal Storage',
-      `priority` enum('IMPORTANT','NORMAL','LOW') NOT NULL DEFAULT 'NORMAL',
+      `priority` enum('IMPORTANT','NORMAL','LOW') DEFAULT NULL,
       `is_bookmarked` tinyint(1) NOT NULL DEFAULT 0,
       `is_saved` tinyint(1) NOT NULL DEFAULT 0,
       `total_pages` int(11) NOT NULL DEFAULT 1,
@@ -51,9 +51,15 @@ $conn->query("
 $input = getJsonInput();
 
 $title = trim($input["title"] ?? $_POST["title"] ?? "");
-$priority = strtoupper(trim($input["priority"] ?? $_POST["priority"] ?? "NORMAL"));
-if (!in_array($priority, ["IMPORTANT", "NORMAL", "LOW"])) {
-    $priority = "NORMAL";
+
+// Priority is strictly manual or via AI Chat prompt - never auto-assigned on upload
+$rawPriority = $input["priority"] ?? $_POST["priority"] ?? null;
+$priority = null;
+if ($rawPriority !== null && trim($rawPriority) !== "") {
+    $cleanPriority = strtoupper(trim($rawPriority));
+    if (in_array($cleanPriority, ["IMPORTANT", "NORMAL", "LOW"])) {
+        $priority = $cleanPriority;
+    }
 }
 
 $category = trim($input["category"] ?? $_POST["category"] ?? "General");
@@ -178,17 +184,13 @@ if ($title === "" && !$savedRelativePath) {
     ]);
 }
 
-// AI Smart Auto-Categorization & Priority Scoring if not specified
+// AI Smart Auto-Categorization (Category only - Priority is NOT auto-assigned on upload)
 $hasExplicitCategory = !empty($input["category"]) || !empty($_POST["category"]);
-$hasExplicitPriority = !empty($input["priority"]) || !empty($_POST["priority"]);
 
-if (!$hasExplicitCategory || !$hasExplicitPriority) {
+if (!$hasExplicitCategory) {
     $aiPrediction = aiPredictCategoryAndPriority($title, $contentText);
-    if (!$hasExplicitCategory && !empty($aiPrediction["category"])) {
+    if (!empty($aiPrediction["category"])) {
         $category = $aiPrediction["category"];
-    }
-    if (!$hasExplicitPriority && !empty($aiPrediction["priority"])) {
-        $priority = $aiPrediction["priority"];
     }
 }
 

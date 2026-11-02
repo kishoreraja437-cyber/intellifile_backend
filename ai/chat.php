@@ -56,6 +56,251 @@ $conn->query("
 ");
 
 try {
+    // Priority Command Handling (Strictly two ways to set priority: 1. Manual, 2. AI Chat Prompt)
+    $priorityCmd = detectPriorityCommand($prompt);
+    $isPriorityExplQuery = !$priorityCmd && (
+        preg_match('/^(?:how\s+(?:can|do)\s+i\s+set|how\s+to\s+set)\s+(?:the\s+)?priority/i', $prompt) ||
+        preg_match('/^(?:how\s+(?:can|do)\s+i\s+change|how\s+to\s+change)\s+(?:the\s+)?priority/i', $prompt) ||
+        preg_match('/^can\s+you\s+set\s+(?:the\s+)?priority/i', $prompt)
+    );
+
+    if ($priorityCmd !== null || $isPriorityExplQuery) {
+        $baseUrl = getBaseUrl();
+        $filesResult = [];
+
+        if ($isPriorityExplQuery) {
+            $aiResponseText = "In IntelliFile, there are strictly two ways to set a file's priority:\n\n" .
+                "1. **Manual**: Open the document in AI Vault or File Details, tap **Priority**, and choose **Important**, **Normal**, or **Low**.\n" .
+                "2. **AI Chat Prompt**: You can ask me anytime right here! For example, try:\n" .
+                "   • *\"Set priority of AML Assignment.pdf to important\"*\n" .
+                "   • *\"Mark notes.docx as normal priority\"*\n" .
+                "   • *\"Change priority of report.pdf to low\"*\n\n" .
+                "Files uploaded to AI Vault are never automatically assigned a priority. They remain unassigned until you choose to set one.";
+            $category = "GENERAL";
+            $queryType = "APP_DATA_QUERY";
+        } elseif ($priorityCmd['action'] === 'SET') {
+            $targetPriority = $priorityCmd['priority'];
+            $targetFile = $priorityCmd['target_file'];
+            $matchedDoc = findUserDocumentByTitle($conn, $userId, $targetFile);
+
+            if ($matchedDoc) {
+                $upStmt = $conn->prepare("UPDATE documents SET priority = ? WHERE id = ? AND user_id = ?");
+                $upStmt->bind_param("sii", $targetPriority, $matchedDoc['id'], $userId);
+                $upStmt->execute();
+                $upStmt->close();
+
+                $aiResponseText = "I have updated the priority of '**{$matchedDoc['title']}**' to **{$targetPriority}** as requested.\n\nYou can view and filter this file under the {$targetPriority} priority section in your AI Vault and Saved screen.";
+                $category = "ANALYSIS";
+                $queryType = "APP_DATA_QUERY";
+                $filesResult = [
+                    [
+                        "id" => (int) $matchedDoc["id"],
+                        "title" => $matchedDoc["title"],
+                        "format" => $matchedDoc["format"],
+                        "size" => $matchedDoc["file_size"],
+                        "dateText" => "Priority: " . $targetPriority,
+                        "priority" => $targetPriority,
+                        "category" => $matchedDoc["category"],
+                        "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
+                    ]
+                ];
+            } else {
+                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your AI Vault. Please check the document name and try again.";
+                $category = "SEARCH";
+                $queryType = "APP_DATA_QUERY";
+            }
+        } elseif ($priorityCmd['action'] === 'CLEAR') {
+            $targetFile = $priorityCmd['target_file'];
+            $matchedDoc = findUserDocumentByTitle($conn, $userId, $targetFile);
+
+            if ($matchedDoc) {
+                $upStmt = $conn->prepare("UPDATE documents SET priority = NULL WHERE id = ? AND user_id = ?");
+                $upStmt->bind_param("ii", $matchedDoc['id'], $userId);
+                $upStmt->execute();
+                $upStmt->close();
+
+                $aiResponseText = "I have cleared the priority for '**{$matchedDoc['title']}**'. It is now unassigned.";
+                $category = "ANALYSIS";
+                $queryType = "APP_DATA_QUERY";
+                $filesResult = [
+                    [
+                        "id" => (int) $matchedDoc["id"],
+                        "title" => $matchedDoc["title"],
+                        "format" => $matchedDoc["format"],
+                        "size" => $matchedDoc["file_size"],
+                        "dateText" => "Priority: Unassigned",
+                        "priority" => null,
+                        "category" => $matchedDoc["category"],
+                        "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
+                    ]
+                ];
+            } else {
+                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your AI Vault.";
+                $category = "SEARCH";
+                $queryType = "APP_DATA_QUERY";
+            }
+        } elseif ($priorityCmd['action'] === 'CHECK') {
+            $targetFile = $priorityCmd['target_file'];
+            $matchedDoc = findUserDocumentByTitle($conn, $userId, $targetFile);
+
+            if ($matchedDoc) {
+                $currentPrio = $matchedDoc['priority'];
+                if (!empty($currentPrio)) {
+                    $aiResponseText = "The current priority of '**{$matchedDoc['title']}**' is **{$currentPrio}**.";
+                } else {
+                    $aiResponseText = "The priority of '**{$matchedDoc['title']}**' is currently **Not Set** (unassigned). You can set it manually or ask me: *\"Set priority of {$matchedDoc['title']} to Important\"*.";
+                }
+                $category = "ANALYSIS";
+                $queryType = "APP_DATA_QUERY";
+                $filesResult = [
+                    [
+                        "id" => (int) $matchedDoc["id"],
+                        "title" => $matchedDoc["title"],
+                        "format" => $matchedDoc["format"],
+                        "size" => $matchedDoc["file_size"],
+                        "dateText" => !empty($currentPrio) ? "Priority: $currentPrio" : "Priority: Not Set",
+                        "priority" => $currentPrio,
+                        "category" => $matchedDoc["category"],
+                        "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
+                    ]
+                ];
+            } else {
+                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your AI Vault.";
+                $category = "SEARCH";
+                $queryType = "APP_DATA_QUERY";
+            }
+        }
+
+        // Conversation & message persistence for priority action
+        if ($conversationId <= 0) {
+            $convTitle = mb_substr($prompt, 0, 60);
+            $convSnippet = mb_substr($aiResponseText, 0, 120);
+
+            $createConv = $conn->prepare("INSERT INTO ai_conversations (user_id, title, snippet, category) VALUES (?, ?, ?, ?)");
+            $createConv->bind_param("isss", $userId, $convTitle, $convSnippet, $category);
+            $createConv->execute();
+            $conversationId = $conn->insert_id;
+            $createConv->close();
+        } else {
+            $updateConv = $conn->prepare("UPDATE ai_conversations SET snippet = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?");
+            $snippetSample = mb_substr($aiResponseText, 0, 120);
+            $updateConv->bind_param("sii", $snippetSample, $conversationId, $userId);
+            $updateConv->execute();
+            $updateConv->close();
+        }
+
+        $userMsgStmt = $conn->prepare("INSERT INTO ai_chat_messages (conversation_id, sender, message_text) VALUES (?, 'USER', ?)");
+        $userMsgStmt->bind_param("is", $conversationId, $prompt);
+        $userMsgStmt->execute();
+        $userMsgStmt->close();
+
+        $jsonFiles = !empty($filesResult) ? json_encode($filesResult) : null;
+        $aiMsgStmt = $conn->prepare("INSERT INTO ai_chat_messages (conversation_id, sender, message_text, related_files_json) VALUES (?, 'AI', ?, ?)");
+        $aiMsgStmt->bind_param("iss", $conversationId, $aiResponseText, $jsonFiles);
+        $aiMsgStmt->execute();
+        $aiMsgId = $conn->insert_id;
+        $aiMsgStmt->close();
+
+        sendJsonResponse(200, [
+            "success" => true,
+            "conversation_id" => $conversationId,
+            "category" => $category,
+            "query_type" => $queryType,
+            "message" => [
+                "id" => $aiMsgId,
+                "sender" => "AI",
+                "text" => $aiResponseText,
+                "files" => $filesResult,
+                "created_at" => date("Y-m-d H:i:s")
+            ]
+        ]);
+        exit;
+    }
+
+    // File Search / Filter / Open Command Handling
+    $searchIntent = detectFileSearchIntent($prompt);
+    if ($searchIntent !== null) {
+        $searchAction = $searchIntent["action"];
+        $searchKeyword = $searchIntent["query"];
+        $formatFilter = $searchIntent["format"];
+
+        $matchedFiles = searchUserVaultDocuments($conn, $userId, $searchKeyword, $formatFilter);
+        $count = count($matchedFiles);
+        $filesResult = $matchedFiles;
+        $category = "SEARCH";
+        $queryType = "FILE_SEARCH";
+
+        if ($searchAction === "OPEN") {
+            if ($count === 1) {
+                $docName = $matchedFiles[0]["title"];
+                $aiResponseText = "Opening '**{$docName}**'. You can view and read the full document below.";
+            } elseif ($count > 1) {
+                $aiResponseText = "I found **{$count} files** matching '**{$searchKeyword}**'. Tap a file card below to open it:";
+            } else {
+                $aiResponseText = "No matching files found for '**{$searchKeyword}**' in your AI Vault. Please verify the filename or upload the document.";
+            }
+        } elseif ($searchAction === "FILTER") {
+            $fmtLabel = $formatFilter ?: "matching";
+            if ($count > 0) {
+                $aiResponseText = "Here are your **{$count} {$fmtLabel} file" . ($count > 1 ? "s" : "") . "** stored in your AI Vault:";
+            } else {
+                $aiResponseText = "No {$fmtLabel} files found in your AI Vault.";
+            }
+        } else {
+            // SEARCH
+            if ($count > 0) {
+                $aiResponseText = "I found **{$count} matching file" . ($count > 1 ? "s" : "") . "** for '**{$searchKeyword}**' in your AI Vault:";
+            } else {
+                $aiResponseText = "No matching files found for '**{$searchKeyword}**'. Try another filename or keyword.";
+            }
+        }
+
+        // Conversation & message persistence for search
+        if ($conversationId <= 0) {
+            $convTitle = mb_substr($prompt, 0, 60);
+            $convSnippet = mb_substr($aiResponseText, 0, 120);
+
+            $createConv = $conn->prepare("INSERT INTO ai_conversations (user_id, title, snippet, category) VALUES (?, ?, ?, ?)");
+            $createConv->bind_param("isss", $userId, $convTitle, $convSnippet, $category);
+            $createConv->execute();
+            $conversationId = $conn->insert_id;
+            $createConv->close();
+        } else {
+            $updateConv = $conn->prepare("UPDATE ai_conversations SET snippet = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?");
+            $snippetSample = mb_substr($aiResponseText, 0, 120);
+            $updateConv->bind_param("sii", $snippetSample, $conversationId, $userId);
+            $updateConv->execute();
+            $updateConv->close();
+        }
+
+        $userMsgStmt = $conn->prepare("INSERT INTO ai_chat_messages (conversation_id, sender, message_text) VALUES (?, 'USER', ?)");
+        $userMsgStmt->bind_param("is", $conversationId, $prompt);
+        $userMsgStmt->execute();
+        $userMsgStmt->close();
+
+        $jsonFiles = !empty($filesResult) ? json_encode($filesResult) : null;
+        $aiMsgStmt = $conn->prepare("INSERT INTO ai_chat_messages (conversation_id, sender, message_text, related_files_json) VALUES (?, 'AI', ?, ?)");
+        $aiMsgStmt->bind_param("iss", $conversationId, $aiResponseText, $jsonFiles);
+        $aiMsgStmt->execute();
+        $aiMsgId = $conn->insert_id;
+        $aiMsgStmt->close();
+
+        sendJsonResponse(200, [
+            "success" => true,
+            "conversation_id" => $conversationId,
+            "category" => $category,
+            "query_type" => $queryType,
+            "message" => [
+                "id" => $aiMsgId,
+                "sender" => "AI",
+                "text" => $aiResponseText,
+                "files" => $filesResult,
+                "created_at" => date("Y-m-d H:i:s")
+            ]
+        ]);
+        exit;
+    }
+
     // Determine category automatically if not supplied
     $lowerPrompt = strtolower($prompt);
     if ($category === "" || !in_array($category, ["ANALYSIS", "SEARCH", "GENERAL"])) {
@@ -139,7 +384,7 @@ try {
                     "format" => $af["format"] ?? "PDF",
                     "size" => $af["size"] ?? "1.0 MB",
                     "dateText" => $af["dateText"] ?? "Recent",
-                    "priority" => $af["priority"] ?? "NORMAL",
+                    "priority" => $af["priority"] ?? null,
                     "category" => $af["category"] ?? "General",
                     "file_url" => $af["file_url"] ?? null
                 ];
@@ -169,7 +414,7 @@ try {
                     "dateText" => !empty($dateOrPage) ? $dateOrPage : "Recent",
                     "similarity" => $s["similarity"] ?? 0.0,
                     "snippet" => $s["snippet"] ?? "",
-                    "priority" => $matchedMeta["priority"] ?? "NORMAL",
+                    "priority" => $matchedMeta["priority"] ?? null,
                     "category" => $matchedMeta["category"] ?? "General",
                     "file_url" => !empty($matchedMeta["file_path"]) ? ($baseUrl . $matchedMeta["file_path"]) : null
                 ];

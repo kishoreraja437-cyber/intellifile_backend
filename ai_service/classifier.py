@@ -67,7 +67,9 @@ class QueryClassifier:
 
         # Determine sub_intent for App Data
         if has_app_data_intent:
-            if any(k in clean_q for k in ["total file", "total document", "how many total", "how many files are stored", "total count"]):
+            if any(k in clean_q for k in ["set priority", "change priority", "update priority", "mark as important", "mark as low", "set as important", "assign priority", "how to set priority"]):
+                sub_intent = "SET_PRIORITY"
+            elif any(k in clean_q for k in ["total file", "total document", "how many total", "how many files are stored", "total count"]):
                 sub_intent = "COUNT_TOTAL"
             elif any(k in clean_q for k in ["how many pdf", "how many docx", "how many ppt", "which file type", "most used", "file format", "file type"]):
                 sub_intent = "FORMAT_STATS"

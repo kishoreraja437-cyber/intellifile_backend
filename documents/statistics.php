@@ -38,7 +38,7 @@ try {
     $lowCount = 0;
 
     while ($row = $pResult->fetch_assoc()) {
-        $p = strtoupper($row["priority"]);
+        $p = strtoupper($row["priority"] ?? "");
         $c = (int) $row["count"];
         if ($p === "IMPORTANT") $importantCount = $c;
         elseif ($p === "NORMAL") $normalCount = $c;

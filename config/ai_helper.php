@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__ . "/auth_helper.php";
+
 /**
  * IntelliFile AI Microservice Bridge
  * Connects PHP backend to local Python AI service on http://127.0.0.1:5000
@@ -213,8 +215,10 @@ function getUserAppStatistics(mysqli $conn, int $userId): array {
     $pRes = $stmt->get_result();
     $priorityCounts = ["IMPORTANT" => 0, "NORMAL" => 0, "LOW" => 0];
     while ($r = $pRes->fetch_assoc()) {
-        $p = strtoupper($r["priority"]);
-        $priorityCounts[$p] = (int) $r["count"];
+        $p = strtoupper($r["priority"] ?? "");
+        if (isset($priorityCounts[$p])) {
+            $priorityCounts[$p] = (int) $r["count"];
+        }
     }
     $stmt->close();
 
@@ -305,4 +309,328 @@ function aiDeleteDocumentIndex(int $userId, int $docId): ?array {
         "user_id" => $userId,
         "doc_id" => $docId
     ], 5);
+}
+
+
+/**
+ * Normalizes priority strings to 'IMPORTANT', 'NORMAL', or 'LOW'.
+ */
+function normalizePriority(string $val): string {
+    $v = strtoupper(trim($val));
+    if (in_array($v, ['HIGH', 'URGENT', 'IMPORTANT'])) return 'IMPORTANT';
+    if (in_array($v, ['NORMAL', 'MEDIUM', 'REGULAR'])) return 'NORMAL';
+    if ($v === 'LOW') return 'LOW';
+    return 'NORMAL';
+}
+
+/**
+ * Cleans user-provided file names from chat prompts.
+ */
+function cleanTargetFileName(string $raw): string {
+    $clean = trim($raw, ' \'"\t\n\r\0\x0B');
+    $clean = preg_replace('/^(the\s+file\s+|the\s+document\s+|file\s+|document\s+)/i', '', $clean);
+    $clean = preg_replace('/(\s+file|\s+document)$/i', '', $clean);
+    return trim($clean, ' \'"\t\n\r\0\x0B');
+}
+
+/**
+ * Detects whether a prompt in AI chat is requesting to set, clear, check, or query priority.
+ */
+function detectPriorityCommand(string $prompt): ?array {
+    $clean = trim($prompt);
+    $prioRegex = '(?:important|high|urgent|normal|medium|regular|low)';
+
+    // Pattern 1: assign (priority)? (P) to (File)
+    if (preg_match('/^assign\s+(?:the\s+)?(?:priority\s+)?(' . $prioRegex . ')\s+(?:priority\s+)?to\s+(?:the\s+)?(.+?)\.?$/i', $clean, $m)) {
+        return [
+            'action' => 'SET',
+            'target_file' => cleanTargetFileName($m[2]),
+            'priority' => normalizePriority($m[1])
+        ];
+    }
+
+    // Pattern 2: set/change/update (the) priority of/for (File) to/as (P)
+    if (preg_match('/^(?:set|change|update)\s+(?:the\s+)?priority\s+(?:of|for)\s+(?:the\s+)?(.+?)\s+(?:to|as)\s+(' . $prioRegex . ')(?:\s+priority)?\.?$/i', $clean, $m)) {
+        return [
+            'action' => 'SET',
+            'target_file' => cleanTargetFileName($m[1]),
+            'priority' => normalizePriority($m[2])
+        ];
+    }
+
+    // Pattern 3: set/change/update (File) priority to/as (P)
+    if (preg_match('/^(?:set|change|update)\s+(?:the\s+)?(.+?)\s+priority\s+(?:to|as)\s+(' . $prioRegex . ')(?:\s+priority)?\.?$/i', $clean, $m)) {
+        return [
+            'action' => 'SET',
+            'target_file' => cleanTargetFileName($m[1]),
+            'priority' => normalizePriority($m[2])
+        ];
+    }
+
+    // Pattern 4: mark/make/tag (File) as/to (P) (priority)
+    if (preg_match('/^(?:mark|make|tag)\s+(?:the\s+)?(.+?)\s+(?:as|to)\s+(' . $prioRegex . ')(?:\s+priority)?\.?$/i', $clean, $m)) {
+        return [
+            'action' => 'SET',
+            'target_file' => cleanTargetFileName($m[1]),
+            'priority' => normalizePriority($m[2])
+        ];
+    }
+
+    // Pattern 5: set/mark (File) to (P) priority
+    if (preg_match('/^(?:set|mark)\s+(?:the\s+)?(.+?)\s+to\s+(' . $prioRegex . ')\s+priority\.?$/i', $clean, $m)) {
+        return [
+            'action' => 'SET',
+            'target_file' => cleanTargetFileName($m[1]),
+            'priority' => normalizePriority($m[2])
+        ];
+    }
+
+    // Clear / Remove priority
+    if (preg_match('/^(?:remove|clear|unset|reset|delete)\s+(?:the\s+)?priority\s+(?:of|for)\s+(?:the\s+)?(.+?)\.?$/i', $clean, $m)) {
+        return [
+            'action' => 'CLEAR',
+            'target_file' => cleanTargetFileName($m[1]),
+            'priority' => null
+        ];
+    }
+
+    // Check / Query priority
+    if (preg_match('/^(?:what\s+is\s+the\s+priority\s+of|check\s+(?:the\s+)?priority\s+of|show\s+(?:the\s+)?priority\s+of|get\s+(?:the\s+)?priority\s+of)\s+["\']?(.+?)["\']?\??$/i', $clean, $m)) {
+        return [
+            'action' => 'CHECK',
+            'target_file' => cleanTargetFileName($m[1]),
+            'priority' => null
+        ];
+    }
+
+    return null;
+}
+
+/**
+ * Searches the user's documents in the database by title or title match.
+ */
+function findUserDocumentByTitle($conn, int $userId, string $rawQueryTitle): ?array {
+    $cleanTitle = cleanTargetFileName($rawQueryTitle);
+    $cleanTitle = preg_replace('/[\.\,\?\!]+$/', '', $cleanTitle);
+    if (empty($cleanTitle)) return null;
+
+    // 1. Exact title match
+    $stmt = $conn->prepare("SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages FROM documents WHERE user_id = ? AND title = ? LIMIT 1");
+    $stmt->bind_param("is", $userId, $cleanTitle);
+    $stmt->execute();
+    $doc = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if ($doc) return $doc;
+
+    // 2. Case-insensitive exact title match
+    $stmt = $conn->prepare("SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages FROM documents WHERE user_id = ? AND LOWER(title) = LOWER(?) LIMIT 1");
+    $stmt->bind_param("is", $userId, $cleanTitle);
+    $stmt->execute();
+    $doc = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if ($doc) return $doc;
+
+    // 3. Match without file extension
+    $stmt = $conn->prepare("SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages FROM documents WHERE user_id = ? AND LOWER(SUBSTRING_INDEX(title, '.', 1)) = LOWER(?) LIMIT 1");
+    $stmt->bind_param("is", $userId, $cleanTitle);
+    $stmt->execute();
+    $doc = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if ($doc) return $doc;
+
+    // 4. Substring LIKE match
+    $like = "%" . $cleanTitle . "%";
+    $stmt = $conn->prepare("SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages FROM documents WHERE user_id = ? AND title LIKE ? ORDER BY last_accessed DESC LIMIT 1");
+    $stmt->bind_param("is", $userId, $like);
+    $stmt->execute();
+    $doc = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if ($doc) return $doc;
+
+    return null;
+}
+
+/**
+ * Detects whether a prompt in AI chat is asking to search, filter, or open a file.
+ */
+function detectFileSearchIntent(string $prompt): ?array {
+    $clean = trim($prompt);
+
+    // Exclude RAG summaries / explanations / analysis
+    if (preg_match('/\b(summar|explain|key\s+point|compare|analysis|takeaway)\b/i', $clean)) {
+        return null;
+    }
+
+    // Exclude App stats count queries
+    if (preg_match('/\bhow\s+many\b/i', $clean) || preg_match('/\b(total\s+count|count\s+of)\b/i', $clean)) {
+        return null;
+    }
+
+    // Exclude General AI questions
+    if (preg_match('/^(?:what\s+is|what\s+are|how\s+does|why\s+is|tell\s+me\s+about|write\s+a)\b/i', $clean)) {
+        return null;
+    }
+
+    // 1. FILE_OPEN: e.g. "open assignment.pdf", "open my project report", "view Java notes", "read resume"
+    if (preg_match('/^(?:open|view|read|launch)\s+(?:the\s+file\s+|the\s+document\s+|my\s+|the\s+)?(.+?)[.\?!]?$/i', $clean, $m)) {
+        $target = trim($m[1], " \t\n\r\0\x0B'\"");
+        if (!empty($target)) {
+            return [
+                "action" => "OPEN",
+                "query" => $target,
+                "format" => null
+            ];
+        }
+    }
+
+    // 2. FILE_TYPE_FILTER: e.g. "show all PDF files", "find all docx files", "show my PPT files", "show word documents"
+    if (preg_match('/^(?:show|find|list|display|get)\s+(?:all\s+)?(?:my\s+)?(pdf|docx?|word|pptx?|powerpoint|txt|text|csv|xlsx?|excel)\s*(?:files?|documents?|\s*$)/i', $clean, $m)) {
+        $rawFmt = strtoupper($m[1]);
+        if ($rawFmt === "DOC" || $rawFmt === "WORD") $rawFmt = "DOCX";
+        if ($rawFmt === "PPT" || $rawFmt === "POWERPOINT") $rawFmt = "PPT";
+        if ($rawFmt === "XLS" || $rawFmt === "EXCEL") $rawFmt = "XLSX";
+        if ($rawFmt === "TEXT") $rawFmt = "TXT";
+        return [
+            "action" => "FILTER",
+            "query" => "",
+            "format" => $rawFmt
+        ];
+    }
+
+    // 3. FILE_SEARCH: e.g. "Show my Java notes", "Find assignment.pdf", "Search for project report", "Find my resume", "Where is my salary slip"
+    $searchPrefixes = [
+        '/^(?:find|search(?:\s+for)?|where\s+is|where\s+are|look\s+for|show\s+me|show|locate|get)\s+(?:files?\s+(?:containing|with)\s+)?(?:my\s+|the\s+)?(.+?)[.\?!]?$/i',
+        '/^(?:do\s+i\s+have|is\s+there)\s+(?:any\s+)?(?:files?\s+(?:on|for|about)\s+|my\s+|the\s+)?(.+?)\??$/i'
+    ];
+
+    foreach ($searchPrefixes as $pat) {
+        if (preg_match($pat, $clean, $m)) {
+            $target = trim($m[1], " \t\n\r\0\x0B'\"");
+            $target = preg_replace('/^(the\s+file\s+|the\s+document\s+|file\s+|document\s+)/i', '', $target);
+            $target = preg_replace('/(\s+file|\s+document|\s+files|\s+documents)$/i', '', $target);
+            $target = trim($target);
+
+            // Extract format if mentioned
+            $format = null;
+            if (preg_match('/\b(pdf|docx?|pptx?|txt|csv|xlsx?)\b/i', $target, $fm)) {
+                $format = strtoupper($fm[1]);
+            }
+
+            if (!empty($target)) {
+                return [
+                    "action" => "SEARCH",
+                    "query" => $target,
+                    "format" => $format
+                ];
+            }
+        }
+    }
+
+    // 4. Standalone filename with document extension (e.g. "assignment.pdf", "resume.docx", "notes.txt")
+    if (preg_match('/^([a-zA-Z0-9_\-\s\(\)]+\.(pdf|docx?|pptx?|xlsx?|txt|csv))[.\?!]?$/i', $clean, $m)) {
+        return [
+            "action" => "SEARCH",
+            "query" => trim($m[1], " \t\n\r\0\x0B'\""),
+            "format" => strtoupper(pathinfo($m[1], PATHINFO_EXTENSION))
+        ];
+    }
+
+    return null;
+}
+
+/**
+ * Searches the authenticated user's documents in the database.
+ */
+function searchUserVaultDocuments($conn, int $userId, string $query, ?string $formatFilter = null): array {
+    $cleanQuery = trim($query);
+    $params = [$userId];
+    $types = "i";
+
+    $whereClauses = ["user_id = ?"];
+
+    // Format filter
+    if (!empty($formatFilter)) {
+        $fmt = strtoupper($formatFilter);
+        if ($fmt === "WORD" || $fmt === "DOC") {
+            $whereClauses[] = "(format = 'DOC' OR format = 'DOCX')";
+        } elseif ($fmt === "POWERPOINT" || $fmt === "PPT") {
+            $whereClauses[] = "(format = 'PPT' OR format = 'PPTX')";
+        } elseif ($fmt === "EXCEL" || $fmt === "XLS") {
+            $whereClauses[] = "(format = 'XLS' OR format = 'XLSX')";
+        } else {
+            $whereClauses[] = "format = ?";
+            $params[] = $fmt;
+            $types .= "s";
+        }
+    }
+
+    if ($cleanQuery !== "" && $cleanQuery !== "all" && $cleanQuery !== "files" && $cleanQuery !== "documents") {
+        $like = "%" . $cleanQuery . "%";
+        $subLike = "(title LIKE ? OR category LIKE ? OR content_text LIKE ?)";
+        $params[] = $like;
+        $params[] = $like;
+        $params[] = $like;
+        $types .= "sss";
+
+        // Split into words if multi-word query
+        $words = preg_split('/\s+/', $cleanQuery);
+        if (count($words) > 1) {
+            $wordClauses = [];
+            foreach ($words as $w) {
+                $w = trim($w);
+                if (strlen($w) >= 2 && !in_array(strtolower($w), ['the', 'my', 'all', 'file', 'files', 'doc', 'docs'])) {
+                    $wordClauses[] = "(title LIKE ? OR content_text LIKE ?)";
+                    $wLike = "%" . $w . "%";
+                    $params[] = $wLike;
+                    $params[] = $wLike;
+                    $types .= "ss";
+                }
+            }
+            if (!empty($wordClauses)) {
+                $subLike = "($subLike OR " . implode(" OR ", $wordClauses) . ")";
+            }
+        }
+        $whereClauses[] = $subLike;
+    }
+
+    $whereSql = implode(" AND ", $whereClauses);
+    $sql = "SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages, content_text, last_accessed, created_at 
+            FROM documents 
+            WHERE {$whereSql} 
+            ORDER BY 
+                priority = 'IMPORTANT' DESC,
+                last_accessed DESC 
+            LIMIT 25";
+
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) return [];
+
+    $stmt->bind_param($types, ...$params);
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    $baseUrl = getBaseUrl();
+    $matched = [];
+    while ($row = $res->fetch_assoc()) {
+        $fileUrl = !empty($row["file_path"]) ? ($baseUrl . $row["file_path"]) : null;
+        $dateText = date("M j, Y", strtotime($row["last_accessed"] ?? $row["created_at"]));
+        $snippet = !empty($row["content_text"]) ? (mb_substr($row["content_text"], 0, 150) . "...") : null;
+
+        $matched[] = [
+            "id" => (int) $row["id"],
+            "title" => $row["title"],
+            "format" => $row["format"],
+            "size" => $row["file_size"],
+            "dateText" => $dateText,
+            "priority" => $row["priority"],
+            "category" => $row["category"],
+            "location" => $row["location"],
+            "file_url" => $fileUrl,
+            "file_path" => $row["file_path"],
+            "source" => "AI Vault",
+            "snippet" => $snippet
+        ];
+    }
+    $stmt->close();
+    return $matched;
 }

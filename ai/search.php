@@ -97,6 +97,7 @@ try {
         "success" => true,
         "query" => $query,
         "count" => count($matchedFiles),
+        "documents" => $matchedFiles,
         "results" => $matchedFiles
     ]);
 

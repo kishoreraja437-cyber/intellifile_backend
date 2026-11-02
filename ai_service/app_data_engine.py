@@ -31,13 +31,25 @@ class AppDataEngine:
             else:
                 answer = f"You have uploaded **{today_count} file{'s' if today_count != 1 else ''}** today (out of {total_files} total files)."
 
+        # Priority Setting instruction / guide
+        elif sub_intent == "SET_PRIORITY" or any(k in lower_q for k in ["set priority", "change priority", "update priority", "how to set priority"]):
+            answer = (
+                "In IntelliFile, there are strictly two ways to set a document's priority:\n\n"
+                "1. **Manual**: Open the document in AI Vault or File Details, tap **Priority**, and choose **Important**, **Normal**, or **Low**.\n"
+                "2. **AI Chat Prompt**: Ask me anytime right here in chat! For example, say *\"Set priority of [Document Name] to important\"* or *\"Mark [Document Name] as normal\"*.\n\n"
+                "Files uploaded to AI Vault are never automatically assigned a priority. They remain unassigned until you choose to set one."
+            )
+
         # 2. Priority Statistics (Important files)
         elif sub_intent == "PRIORITY_STATS" or any(k in lower_q for k in ["important", "priority"]):
+            unassigned_count = max(0, total_files - (important_count + normal_count + low_count))
+            unassigned_line = f"\n• **Unassigned**: {unassigned_count}" if unassigned_count > 0 else ""
             answer = (
                 f"You have **{important_count} Important file{'s' if important_count != 1 else ''}** saved in your workspace.\n\n"
                 f"• **Important**: {important_count}\n"
                 f"• **Normal**: {normal_count}\n"
-                f"• **Low**: {low_count}\n\n"
+                f"• **Low**: {low_count}"
+                f"{unassigned_line}\n\n"
                 f"Total files: {total_files}."
             )
 
