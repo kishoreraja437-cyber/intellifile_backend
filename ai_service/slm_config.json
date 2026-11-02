@@ -1,0 +1,11 @@
+{
+  "provider": "grounded_synthesizer",
+  "model_name": "Qwen/Qwen2.5-0.5B-Instruct",
+  "ollama_endpoint": "http://127.0.0.1:11434",
+  "ollama_model": "qwen2.5:0.5b",
+  "max_tokens": 350,
+  "temperature": 0.2,
+  "top_p": 0.9,
+  "description": "Configurable SLM engine: set 'provider' to 'grounded_synthesizer', 'hf_local', or 'ollama'."
+}
+

@@ -16,6 +16,10 @@ from standalone_nlp import (
     split_into_sentences
 )
 
+# Import RAG and SLM Pipeline
+from rag_pipeline import RAGPipeline
+rag_pipeline = RAGPipeline()
+
 # Optional scikit-learn pipeline support
 SKLEARN_AVAILABLE = False
 try:
@@ -204,7 +208,10 @@ class AIRequestHandler(BaseHTTPRequestHandler):
             self._send_json(200, {
                 "status": "online",
                 "service": "IntelliFile Local AI Microservice",
-                "version": "1.0.0",
+                "version": "2.0.0",
+                "rag_slm_enabled": True,
+                "vector_store": "sqlite3_wal",
+                "slm_provider": rag_pipeline.slm_engine.config.get("provider", "grounded_synthesizer"),
                 "sklearn_enabled": SKLEARN_AVAILABLE,
                 "model_status": "loaded"
             })
@@ -221,7 +228,46 @@ class AIRequestHandler(BaseHTTPRequestHandler):
         except Exception:
             body = {}
 
-        if path == "/predict_category_priority":
+        if path == "/rag_chat":
+            user_id = int(body.get("user_id", self.headers.get("X-User-Id", 0)))
+            query = str(body.get("query", body.get("message", body.get("prompt", "")))).strip()
+            history = body.get("conversation_history", [])
+            filter_docs = body.get("filter_doc_ids", None)
+            res = rag_pipeline.chat(user_id=user_id, query=query, conversation_history=history, filter_doc_ids=filter_docs)
+            status = 200 if res.get("success") else 400
+            self._send_json(status, res)
+
+        elif path == "/index_document":
+            user_id = int(body.get("user_id", self.headers.get("X-User-Id", 0)))
+            doc_id = int(body.get("doc_id", body.get("id", 0)))
+            title = str(body.get("title", "")).strip()
+            doc_format = str(body.get("format", "PDF")).strip()
+            content_text = str(body.get("content_text", "")).strip()
+            total_pages = int(body.get("total_pages", 1))
+            res = rag_pipeline.index_document(
+                user_id=user_id,
+                doc_id=doc_id,
+                title=title,
+                doc_format=doc_format,
+                content_text=content_text,
+                total_pages=total_pages
+            )
+            status = 200 if res.get("success") else 400
+            self._send_json(status, res)
+
+        elif path == "/sync_documents":
+            user_id = int(body.get("user_id", self.headers.get("X-User-Id", 0)))
+            documents = body.get("documents", [])
+            res = rag_pipeline.sync_user_documents(user_id=user_id, documents=documents)
+            self._send_json(200, res)
+
+        elif path == "/delete_document_index":
+            user_id = int(body.get("user_id", self.headers.get("X-User-Id", 0)))
+            doc_id = int(body.get("doc_id", body.get("id", 0)))
+            deleted = rag_pipeline.delete_document(user_id=user_id, doc_id=doc_id)
+            self._send_json(200, {"success": True, "deleted": deleted})
+
+        elif path == "/predict_category_priority":
             title = str(body.get("title", "")).strip()
             content = str(body.get("content_text", "")).strip()
             res = run_prediction(title, content)

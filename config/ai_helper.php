@@ -160,3 +160,54 @@ function aiExtractPdfText(string $filePath): ?array {
 
     return $res;
 }
+
+/**
+ * Executes full RAG + SLM Chat query through local Python microservice.
+ * Enforces user_id isolation and passes conversation history for follow-ups.
+ */
+function aiRunRagChat(int $userId, string $query, array $conversationHistory = [], ?array $filterDocIds = null): ?array {
+    $payload = [
+        "user_id" => $userId,
+        "query" => $query,
+        "conversation_history" => $conversationHistory
+    ];
+    if (!empty($filterDocIds)) {
+        $payload["filter_doc_ids"] = $filterDocIds;
+    }
+    return callPythonAiService("rag_chat", $payload, 12);
+}
+
+/**
+ * Indexes a document into the local Vector Database.
+ * Deduplicates automatically by content hash.
+ */
+function aiIndexDocument(int $userId, int $docId, string $title, string $format, string $contentText, int $totalPages = 1): ?array {
+    return callPythonAiService("index_document", [
+        "user_id" => $userId,
+        "doc_id" => $docId,
+        "title" => $title,
+        "format" => $format,
+        "content_text" => $contentText,
+        "total_pages" => $totalPages
+    ], 10);
+}
+
+/**
+ * Syncs multiple documents for a user into the vector database.
+ */
+function aiSyncUserDocuments(int $userId, array $documents): ?array {
+    return callPythonAiService("sync_documents", [
+        "user_id" => $userId,
+        "documents" => $documents
+    ], 15);
+}
+
+/**
+ * Removes a document from the vector database index.
+ */
+function aiDeleteDocumentIndex(int $userId, int $docId): ?array {
+    return callPythonAiService("delete_document_index", [
+        "user_id" => $userId,
+        "doc_id" => $docId
+    ], 5);
+}

@@ -203,6 +203,11 @@ try {
     $newDocId = $conn->insert_id;
     $stmt->close();
 
+    // Trigger local vector indexing for RAG immediately (deduplicated by content hash)
+    if (!empty($contentText)) {
+        aiIndexDocument($userId, $newDocId, $title, $format, $contentText, $totalPages);
+    }
+
     $fileUrl = $savedRelativePath ? (getBaseUrl() . $savedRelativePath) : null;
 
     sendJsonResponse(201, [

@@ -68,91 +68,90 @@ try {
         }
     }
 
-    // 1. RAG Retrieval Step: Fetch real matching documents from database
-    $words = preg_split("/\s+/", $lowerPrompt);
-    $stopWords = ["the", "is", "at", "which", "on", "a", "an", "and", "or", "in", "for", "to", "my", "this", "that", "file", "files", "document", "documents", "show", "give", "me", "what", "find", "search", "summarize", "tell"];
-    $keywords = array_filter($words, fn($w) => strlen($w) >= 3 && !in_array($w, $stopWords));
-
-    $matchedDocs = [];
-    $searchClauses = [];
-    $searchParams = [$userId];
-    $searchTypes = "i";
-
-    foreach ($keywords as $kw) {
-        $searchClauses[] = "(title LIKE ? OR content_text LIKE ? OR category LIKE ?)";
-        $kwLike = "%" . $kw . "%";
-        $searchParams[] = $kwLike;
-        $searchParams[] = $kwLike;
-        $searchParams[] = $kwLike;
-        $searchTypes .= "sss";
-    }
-
-    if (!empty($searchClauses)) {
-        $ragSql = "SELECT id, title, format, file_size, file_path, category, priority, total_pages, content_text, last_accessed 
-                   FROM documents 
-                   WHERE user_id = ? AND (" . implode(" OR ", $searchClauses) . ") 
-                   ORDER BY priority = 'IMPORTANT' DESC, last_accessed DESC 
-                   LIMIT 5";
-        $ragStmt = $conn->prepare($ragSql);
-        $ragStmt->bind_param($searchTypes, ...$searchParams);
-        $ragStmt->execute();
-        $ragRes = $ragStmt->get_result();
-        while ($d = $ragRes->fetch_assoc()) {
-            $matchedDocs[] = $d;
+    // 1. Fetch conversation history for follow-up questions
+    $conversationHistory = [];
+    if ($conversationId > 0) {
+        $histStmt = $conn->prepare("
+            SELECT sender, message_text 
+            FROM ai_chat_messages 
+            WHERE conversation_id = ? 
+            ORDER BY id ASC 
+            LIMIT 6
+        ");
+        $histStmt->bind_param("i", $conversationId);
+        $histStmt->execute();
+        $hRes = $histStmt->get_result();
+        while ($hr = $hRes->fetch_assoc()) {
+            $conversationHistory[] = [
+                "sender" => $hr["sender"],
+                "text" => $hr["message_text"]
+            ];
         }
-        $ragStmt->close();
+        $histStmt->close();
     }
 
-    // Fallback if no specific keywords: retrieve recent important documents
-    if (empty($matchedDocs)) {
-        $ragSql = "SELECT id, title, format, file_size, file_path, category, priority, total_pages, content_text, last_accessed 
-                   FROM documents 
-                   WHERE user_id = ? 
-                   ORDER BY last_accessed DESC 
-                   LIMIT 3";
-        $ragStmt = $conn->prepare($ragSql);
-        $ragStmt->bind_param("i", $userId);
-        $ragStmt->execute();
-        $ragRes = $ragStmt->get_result();
-        while ($d = $ragRes->fetch_assoc()) {
-            $matchedDocs[] = $d;
-        }
-        $ragStmt->close();
+    // 2. Synchronize user's existing vault documents to vector store
+    // (Only indexes unindexed documents; deduplicated by content hash)
+    $userDocs = [];
+    $docStmt = $conn->prepare("
+        SELECT id, title, format, file_size, file_path, category, priority, total_pages, content_text 
+        FROM documents 
+        WHERE user_id = ? AND content_text IS NOT NULL AND content_text != ''
+    ");
+    $docStmt->bind_param("i", $userId);
+    $docStmt->execute();
+    $dRes = $docStmt->get_result();
+    while ($row = $dRes->fetch_assoc()) {
+        $userDocs[] = $row;
+    }
+    $docStmt->close();
+
+    if (!empty($userDocs)) {
+        aiSyncUserDocuments($userId, $userDocs);
     }
 
-    // 2. RAG Generation / Synthesis Step
-    $filesResult = [];
-    $baseUrl = getBaseUrl();
-    foreach ($matchedDocs as $doc) {
-        $filesResult[] = [
-            "id" => (int) $doc["id"],
-            "title" => $doc["title"],
-            "format" => $doc["format"],
-            "size" => $doc["file_size"],
-            "dateText" => date("M j, Y", strtotime($doc["last_accessed"])),
-            "priority" => $doc["priority"],
-            "category" => $doc["category"],
-            "file_url" => !empty($doc["file_path"]) ? ($baseUrl . $doc["file_path"]) : null
-        ];
-    }
+    // 3. Execute RAG + SLM Pipeline
+    $ragResponse = aiRunRagChat($userId, $prompt, $conversationHistory);
 
     $aiResponseText = "";
+    $filesResult = [];
+    $baseUrl = getBaseUrl();
 
-    // 2. Local Python AI Document Q&A & Semantic Extraction
-    $qaResponse = aiPerformDocumentQA($prompt, $matchedDocs);
-    if (!empty($qaResponse["answer"])) {
-        $aiResponseText = $qaResponse["answer"];
-        if (!empty($qaResponse["category"]) && $category === "GENERAL") {
-            $category = $qaResponse["category"];
+    if ($ragResponse && !empty($ragResponse["success"])) {
+        $aiResponseText = $ragResponse["answer"];
+        $sources = $ragResponse["sources"] ?? [];
+        
+        foreach ($sources as $s) {
+            $docId = (int) ($s["id"] ?? 0);
+            // Locate document meta from userDocs
+            $matchedMeta = null;
+            foreach ($userDocs as $ud) {
+                if ((int)$ud["id"] === $docId) {
+                    $matchedMeta = $ud;
+                    break;
+                }
+            }
+
+            $filesResult[] = [
+                "id" => $docId,
+                "title" => $s["title"] ?? ($matchedMeta["title"] ?? "Document"),
+                "format" => $s["format"] ?? ($matchedMeta["format"] ?? "PDF"),
+                "size" => $matchedMeta["file_size"] ?? "1.0 MB",
+                "page" => $s["page"] ?? 1,
+                "similarity" => $s["similarity"] ?? 0.0,
+                "snippet" => $s["snippet"] ?? "",
+                "priority" => $matchedMeta["priority"] ?? "NORMAL",
+                "category" => $matchedMeta["category"] ?? "General",
+                "file_url" => !empty($matchedMeta["file_path"]) ? ($baseUrl . $matchedMeta["file_path"]) : null
+            ];
         }
     } else {
-        // Graceful heuristic fallback if microservice is offline
+        // Fallback if AI service is offline
         if ($category === "ANALYSIS") {
-            if (!empty($matchedDocs)) {
-                $primaryDoc = $matchedDocs[0];
+            if (!empty($userDocs)) {
+                $primaryDoc = $userDocs[0];
                 $docTitle = $primaryDoc["title"];
                 $contentSample = !empty($primaryDoc["content_text"]) ? $primaryDoc["content_text"] : "No text extracted yet.";
-                
                 $aiResponseText = "Here is the AI analysis for '{$docTitle}':\n" .
                     "• Document Type: {$primaryDoc['format']} ({$primaryDoc['total_pages']} pages, {$primaryDoc['file_size']})\n" .
                     "• Category & Priority: {$primaryDoc['category']} (Priority: {$primaryDoc['priority']})\n" .
@@ -161,20 +160,14 @@ try {
                 $aiResponseText = "I reviewed your repository, but could not find a specific document to analyze. Please upload or specify a file name.";
             }
         } elseif ($category === "SEARCH") {
-            $count = count($matchedDocs);
+            $count = count($userDocs);
             if ($count > 0) {
-                $aiResponseText = "I found {$count} file" . ($count > 1 ? "s" : "") . " matching your request '{$prompt}'.";
+                $aiResponseText = "I found {$count} file" . ($count > 1 ? "s" : "") . " in your documents matching your request.";
             } else {
                 $aiResponseText = "No documents found matching '{$prompt}'. Try checking spelling or searching by category.";
             }
         } else {
-            // GENERAL
-            if (!empty($matchedDocs)) {
-                $docNames = implode(", ", array_slice(array_column($matchedDocs, "title"), 0, 3));
-                $aiResponseText = "Based on your stored documents ({$docNames}), here is what I found regarding '{$prompt}'. Let me know if you would like me to summarize or prioritize them.";
-            } else {
-                $aiResponseText = "Hello! I am your IntelliFile AI Assistant. You can ask me to search, summarize, analyze, or organize your documents anytime.";
-            }
+            $aiResponseText = "I searched your documents, but could not find information regarding '{$prompt}' in your uploaded files.";
         }
     }
 

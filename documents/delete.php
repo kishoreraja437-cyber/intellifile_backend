@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . "/../config/auth_helper.php";
+require_once __DIR__ . "/../config/ai_helper.php";
 
 handleCorsPreflight();
 
@@ -42,6 +43,9 @@ try {
     $delete->bind_param("ii", $docId, $userId);
     $delete->execute();
     $delete->close();
+
+    // Clean up vector database chunks
+    aiDeleteDocumentIndex($userId, $docId);
 
     // Delete physical file if present
     if (!empty($doc["file_path"])) {
