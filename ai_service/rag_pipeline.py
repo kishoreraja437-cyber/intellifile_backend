@@ -130,13 +130,14 @@ class RAGPipeline:
         # 1. Embed query
         query_vec = self.embedding_engine.embed_query(clean_query)
 
-        # 2. Retrieve top-k chunks (Strict User Isolation)
+        # 2. Retrieve top-k chunks (Strict User Isolation with Hybrid Scoring)
         retrieved_chunks = self.vector_store.retrieve_top_k(
             user_id=user_id,
             query_embedding=query_vec,
             top_k=top_k,
             min_similarity=0.03,
-            filter_doc_ids=filter_doc_ids
+            filter_doc_ids=filter_doc_ids,
+            query_text=clean_query
         )
 
         # 3. Grounded Answer Generation via SLM

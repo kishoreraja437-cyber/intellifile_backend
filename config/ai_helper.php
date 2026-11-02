@@ -162,19 +162,114 @@ function aiExtractPdfText(string $filePath): ?array {
 }
 
 /**
- * Executes full RAG + SLM Chat query through local Python microservice.
- * Enforces user_id isolation and passes conversation history for follow-ups.
+ * Executes Hybrid RAG + SLM Chat query through local Python microservice.
+ * Enforces user_id isolation and passes live app_stats & conversation history.
  */
-function aiRunRagChat(int $userId, string $query, array $conversationHistory = [], ?array $filterDocIds = null): ?array {
+function aiRunRagChat(int $userId, string $query, array $conversationHistory = [], ?array $filterDocIds = null, array $appStats = []): ?array {
     $payload = [
         "user_id" => $userId,
         "query" => $query,
-        "conversation_history" => $conversationHistory
+        "conversation_history" => $conversationHistory,
+        "app_stats" => $appStats
     ];
     if (!empty($filterDocIds)) {
         $payload["filter_doc_ids"] = $filterDocIds;
     }
-    return callPythonAiService("rag_chat", $payload, 12);
+    return callPythonAiService("hybrid_chat", $payload, 12);
+}
+
+/**
+ * Fetches actual live IntelliFile repository and storage statistics for the authenticated user.
+ * Used by Hybrid Assistant to answer questions about user's files without inventing numbers.
+ */
+function getUserAppStatistics(mysqli $conn, int $userId): array {
+    // 1. Total files count
+    $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM documents WHERE user_id = ?");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $totalFiles = (int) ($stmt->get_result()->fetch_assoc()["total"] ?? 0);
+    $stmt->close();
+
+    // 2. Format breakdown
+    $stmt = $conn->prepare("SELECT format, COUNT(*) AS count FROM documents WHERE user_id = ? GROUP BY format ORDER BY count DESC");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $fRes = $stmt->get_result();
+    $formatCounts = [];
+    $mostUsedFormat = null;
+    while ($r = $fRes->fetch_assoc()) {
+        $fmt = strtoupper($r["format"]);
+        $formatCounts[$fmt] = (int) $r["count"];
+        if ($mostUsedFormat === null) {
+            $mostUsedFormat = $fmt;
+        }
+    }
+    $stmt->close();
+
+    // 3. Priority breakdown
+    $stmt = $conn->prepare("SELECT priority, COUNT(*) AS count FROM documents WHERE user_id = ? GROUP BY priority");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $pRes = $stmt->get_result();
+    $priorityCounts = ["IMPORTANT" => 0, "NORMAL" => 0, "LOW" => 0];
+    while ($r = $pRes->fetch_assoc()) {
+        $p = strtoupper($r["priority"]);
+        $priorityCounts[$p] = (int) $r["count"];
+    }
+    $stmt->close();
+
+    // 4. Bookmarked files count
+    $stmt = $conn->prepare("SELECT COUNT(*) AS count FROM documents WHERE user_id = ? AND is_bookmarked = 1");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $bookmarkedCount = (int) ($stmt->get_result()->fetch_assoc()["count"] ?? 0);
+    $stmt->close();
+
+    // 5. Saved files count
+    $stmt = $conn->prepare("SELECT COUNT(*) AS count FROM documents WHERE user_id = ? AND is_saved = 1");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $savedCount = (int) ($stmt->get_result()->fetch_assoc()["count"] ?? 0);
+    $stmt->close();
+
+    // 6. Files uploaded today
+    $stmt = $conn->prepare("SELECT COUNT(*) AS count FROM documents WHERE user_id = ? AND DATE(created_at) = CURDATE()");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $todayCount = (int) ($stmt->get_result()->fetch_assoc()["count"] ?? 0);
+    $stmt->close();
+
+    // 7. Recent files (up to 5)
+    $baseUrl = getBaseUrl();
+    $stmt = $conn->prepare("SELECT id, title, format, file_size, file_path, category, priority, created_at FROM documents WHERE user_id = ? ORDER BY created_at DESC LIMIT 5");
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+    $rRes = $stmt->get_result();
+    $recentFiles = [];
+    while ($r = $rRes->fetch_assoc()) {
+        $recentFiles[] = [
+            "id" => (int) $r["id"],
+            "title" => $r["title"],
+            "format" => $r["format"],
+            "size" => $r["file_size"],
+            "dateText" => date("M j, Y", strtotime($r["created_at"])),
+            "priority" => $r["priority"],
+            "category" => $r["category"],
+            "file_url" => !empty($r["file_path"]) ? ($baseUrl . $r["file_path"]) : null
+        ];
+    }
+    $stmt->close();
+
+    return [
+        "total_files" => $totalFiles,
+        "format_counts" => $formatCounts,
+        "priority_counts" => $priorityCounts,
+        "bookmarked_count" => $bookmarkedCount,
+        "saved_count" => $savedCount,
+        "today_count" => $todayCount,
+        "most_used_format" => $mostUsedFormat ?? "None",
+        "recent_files" => $recentFiles
+    ];
 }
 
 /**

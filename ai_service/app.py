@@ -18,7 +18,9 @@ from standalone_nlp import (
 
 # Import RAG and SLM Pipeline
 from rag_pipeline import RAGPipeline
+from hybrid_pipeline import HybridAIAssistant
 rag_pipeline = RAGPipeline()
+hybrid_assistant = HybridAIAssistant(rag_pipeline=rag_pipeline)
 
 # Optional scikit-learn pipeline support
 SKLEARN_AVAILABLE = False
@@ -228,12 +230,19 @@ class AIRequestHandler(BaseHTTPRequestHandler):
         except Exception:
             body = {}
 
-        if path == "/rag_chat":
+        if path == "/hybrid_chat" or path == "/rag_chat":
             user_id = int(body.get("user_id", self.headers.get("X-User-Id", 0)))
             query = str(body.get("query", body.get("message", body.get("prompt", "")))).strip()
             history = body.get("conversation_history", [])
             filter_docs = body.get("filter_doc_ids", None)
-            res = rag_pipeline.chat(user_id=user_id, query=query, conversation_history=history, filter_doc_ids=filter_docs)
+            app_stats = body.get("app_stats", {})
+            res = hybrid_assistant.process_query(
+                user_id=user_id,
+                query=query,
+                app_stats=app_stats,
+                conversation_history=history,
+                filter_doc_ids=filter_docs
+            )
             status = 200 if res.get("success") else 400
             self._send_json(status, res)
 

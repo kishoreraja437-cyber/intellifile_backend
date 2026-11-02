@@ -1,4 +1,5 @@
 import os
+import re
 import sqlite3
 import hashlib
 import numpy as np
@@ -154,12 +155,14 @@ class VectorStore:
         user_id: int,
         query_embedding: np.ndarray,
         top_k: int = 4,
-        min_similarity: float = 0.20,
-        filter_doc_ids: Optional[List[int]] = None
+        min_similarity: float = 0.03,
+        filter_doc_ids: Optional[List[int]] = None,
+        query_text: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Retrieves the most semantically relevant chunks for a user.
         CRITICAL: Strictly enforces user_id isolation (never queries other users' chunks).
+        Applies Hybrid scoring (dense cosine similarity + sparse lexical keyword boost).
         """
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -213,6 +216,20 @@ class VectorStore:
             denoms = mat_norms * q_norm
             denoms[denoms < 1e-8] = 1e-8
             similarities = dot_products / denoms
+
+            # Hybrid Lexical BM25 Boost (Keyword alignment)
+            if query_text:
+                q_clean = query_text.lower().replace("_", " ").replace("-", " ")
+                q_tokens = set(re.findall(r'[a-zA-Z0-9]{3,}', q_clean))
+                stop_words = {"what", "when", "where", "which", "about", "show", "tell", "does", "have", "this", "that", "file", "document", "who", "how", "with", "are", "the"}
+                key_q_tokens = [w for w in q_tokens if w not in stop_words]
+
+                for idx, meta in enumerate(chunk_metas):
+                    title_tokens = set(re.findall(r'[a-zA-Z0-9]{3,}', meta["title"].lower().replace("_", " ")))
+                    text_tokens = set(re.findall(r'[a-zA-Z0-9]{3,}', meta["text"].lower().replace("_", " ")))
+                    title_overlap = sum(1 for t in key_q_tokens if t in title_tokens)
+                    content_overlap = sum(1 for t in key_q_tokens if t in text_tokens)
+                    similarities[idx] += (title_overlap * 0.15) + (content_overlap * 0.08)
 
             # Filter and rank
             ranked_indices = np.argsort(similarities)[::-1]

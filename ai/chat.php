@@ -90,7 +90,10 @@ try {
         $histStmt->close();
     }
 
-    // 2. Synchronize user's existing vault documents to vector store
+    // 2. Fetch live IntelliFile statistics for this authenticated user
+    $appStats = getUserAppStatistics($conn, $userId);
+
+    // 3. Synchronize user's existing vault documents to vector store
     // (Only indexes unindexed documents; deduplicated by content hash)
     $userDocs = [];
     $docStmt = $conn->prepare("
@@ -110,40 +113,67 @@ try {
         aiSyncUserDocuments($userId, $userDocs);
     }
 
-    // 3. Execute RAG + SLM Pipeline
-    $ragResponse = aiRunRagChat($userId, $prompt, $conversationHistory);
+    // 4. Execute Hybrid Assistant Pipeline (Classification -> SLM / App Stats / RAG / Hybrid)
+    $hybridResponse = aiRunRagChat($userId, $prompt, $conversationHistory, null, $appStats);
 
     $aiResponseText = "";
     $filesResult = [];
     $baseUrl = getBaseUrl();
+    $queryType = $hybridResponse["query_type"] ?? "DOCUMENT_QUERY";
 
-    if ($ragResponse && !empty($ragResponse["success"])) {
-        $aiResponseText = $ragResponse["answer"];
-        $sources = $ragResponse["sources"] ?? [];
-        
-        foreach ($sources as $s) {
-            $docId = (int) ($s["id"] ?? 0);
-            // Locate document meta from userDocs
-            $matchedMeta = null;
-            foreach ($userDocs as $ud) {
-                if ((int)$ud["id"] === $docId) {
-                    $matchedMeta = $ud;
-                    break;
-                }
+    if ($hybridResponse && !empty($hybridResponse["success"])) {
+        $aiResponseText = $hybridResponse["answer"];
+        $category = $hybridResponse["category"] ?? $category;
+
+        // Map files/sources depending on query type
+        if ($queryType === "GENERAL_QUERY") {
+            // General questions must NOT attach files or trigger retrieval
+            $filesResult = [];
+        } elseif ($queryType === "APP_DATA_QUERY") {
+            // If recent files or file list requested, attach formatted file list
+            $attached = $hybridResponse["files"] ?? [];
+            foreach ($attached as $af) {
+                $filesResult[] = [
+                    "id" => (int) ($af["id"] ?? 0),
+                    "title" => $af["title"] ?? "Document",
+                    "format" => $af["format"] ?? "PDF",
+                    "size" => $af["size"] ?? "1.0 MB",
+                    "dateText" => $af["dateText"] ?? "Recent",
+                    "priority" => $af["priority"] ?? "NORMAL",
+                    "category" => $af["category"] ?? "General",
+                    "file_url" => $af["file_url"] ?? null
+                ];
             }
+        } else {
+            // DOCUMENT_QUERY or HYBRID_QUERY: attach sources with page citations
+            $sources = $hybridResponse["sources"] ?? $hybridResponse["files"] ?? [];
+            foreach ($sources as $s) {
+                $docId = (int) ($s["id"] ?? 0);
+                $matchedMeta = null;
+                foreach ($userDocs as $ud) {
+                    if ((int)$ud["id"] === $docId) {
+                        $matchedMeta = $ud;
+                        break;
+                    }
+                }
 
-            $filesResult[] = [
-                "id" => $docId,
-                "title" => $s["title"] ?? ($matchedMeta["title"] ?? "Document"),
-                "format" => $s["format"] ?? ($matchedMeta["format"] ?? "PDF"),
-                "size" => $matchedMeta["file_size"] ?? "1.0 MB",
-                "page" => $s["page"] ?? 1,
-                "similarity" => $s["similarity"] ?? 0.0,
-                "snippet" => $s["snippet"] ?? "",
-                "priority" => $matchedMeta["priority"] ?? "NORMAL",
-                "category" => $matchedMeta["category"] ?? "General",
-                "file_url" => !empty($matchedMeta["file_path"]) ? ($baseUrl . $matchedMeta["file_path"]) : null
-            ];
+                $pageStr = (!empty($s["page"]) && $s["page"] > 0) ? "Page " . $s["page"] : null;
+                $dateOrPage = implode(" · ", array_filter([$s["format"] ?? "PDF", $pageStr, $matchedMeta["file_size"] ?? null]));
+
+                $filesResult[] = [
+                    "id" => $docId,
+                    "title" => $s["title"] ?? ($matchedMeta["title"] ?? "Document"),
+                    "format" => $s["format"] ?? ($matchedMeta["format"] ?? "PDF"),
+                    "size" => $matchedMeta["file_size"] ?? "1.0 MB",
+                    "page" => $s["page"] ?? 1,
+                    "dateText" => !empty($dateOrPage) ? $dateOrPage : "Recent",
+                    "similarity" => $s["similarity"] ?? 0.0,
+                    "snippet" => $s["snippet"] ?? "",
+                    "priority" => $matchedMeta["priority"] ?? "NORMAL",
+                    "category" => $matchedMeta["category"] ?? "General",
+                    "file_url" => !empty($matchedMeta["file_path"]) ? ($baseUrl . $matchedMeta["file_path"]) : null
+                ];
+            }
         }
     } else {
         // Fallback if AI service is offline
@@ -207,6 +237,7 @@ try {
         "success" => true,
         "conversation_id" => $conversationId,
         "category" => $category,
+        "query_type" => $queryType,
         "message" => [
             "id" => $aiMsgId,
             "sender" => "AI",
