@@ -9,3 +9,4 @@ function showCols($conn, $table) {
 }
 showCols($conn, 'users');
 showCols($conn, 'user_settings');
+
