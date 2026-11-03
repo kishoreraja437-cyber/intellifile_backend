@@ -220,13 +220,13 @@ class VectorStore:
             # Hybrid Lexical BM25 Boost (Keyword alignment)
             if query_text:
                 q_clean = query_text.lower().replace("_", " ").replace("-", " ")
-                q_tokens = set(re.findall(r'[a-zA-Z0-9]{3,}', q_clean))
-                stop_words = {"what", "when", "where", "which", "about", "show", "tell", "does", "have", "this", "that", "file", "document", "who", "how", "with", "are", "the"}
+                q_tokens = set(re.findall(r'[a-zA-Z0-9]{2,}', q_clean))
+                stop_words = {"what", "when", "where", "which", "about", "show", "tell", "does", "have", "this", "that", "file", "document", "who", "how", "with", "are", "the", "find", "search", "give", "can", "for"}
                 key_q_tokens = [w for w in q_tokens if w not in stop_words]
 
                 for idx, meta in enumerate(chunk_metas):
-                    title_tokens = set(re.findall(r'[a-zA-Z0-9]{3,}', meta["title"].lower().replace("_", " ")))
-                    text_tokens = set(re.findall(r'[a-zA-Z0-9]{3,}', meta["text"].lower().replace("_", " ")))
+                    title_tokens = set(re.findall(r'[a-zA-Z0-9]{2,}', meta["title"].lower().replace("_", " ")))
+                    text_tokens = set(re.findall(r'[a-zA-Z0-9]{2,}', meta["text"].lower().replace("_", " ")))
                     title_overlap = sum(1 for t in key_q_tokens if t in title_tokens)
                     content_overlap = sum(1 for t in key_q_tokens if t in text_tokens)
                     similarities[idx] += (title_overlap * 0.15) + (content_overlap * 0.08)

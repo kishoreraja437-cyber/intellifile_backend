@@ -226,7 +226,7 @@ class SLMEngine:
                     lines.append(f"• **{doc_ref}**: {sample}...")
                 return "\n".join(lines)
             else:
-                sentences = re.split(r'(?<=[.!?])\s+', primary_chunk.get("text", ""))
+                sentences = re.split(r'[\r\n]+|(?<=[.!?])\s+', primary_chunk.get("text", ""))
                 clean_s = [s.strip() for s in sentences if len(s.strip()) > 20]
                 summary_lead = " ".join(clean_s[:3]) if clean_s else primary_chunk.get("text", "")[:250]
                 return (
@@ -239,10 +239,10 @@ class SLMEngine:
         if is_points_request:
             points = []
             for c in context_chunks[:3]:
-                sentences = re.split(r'(?<=[.!?])\s+', c.get("text", ""))
+                sentences = re.split(r'[\r\n]+|(?<=[.!?])\s+', c.get("text", ""))
                 for s in sentences:
                     s_clean = s.strip()
-                    if len(s_clean) > 25 and s_clean not in points:
+                    if len(s_clean) > 15 and s_clean not in points:
                         page_ref = f" (Page {c.get('page', 1)})" if c.get("page") else ""
                         points.append(f"• {s_clean} — *[{c.get('title')}{page_ref}]*")
                     if len(points) >= 4:
@@ -255,13 +255,13 @@ class SLMEngine:
 
         # 3. Targeted Document Question Answering
         clean_q = lower_q.replace("_", " ").replace("-", " ")
-        query_words = set(re.findall(r'[a-zA-Z0-9]{3,}', clean_q))
-        stop_words = {"what", "when", "where", "which", "about", "show", "tell", "does", "have", "this", "that", "file", "document", "who", "how", "with", "are", "the"}
+        query_words = set(re.findall(r'[a-zA-Z0-9]{2,}', clean_q))
+        stop_words = {"what", "when", "where", "which", "about", "show", "tell", "does", "have", "this", "that", "file", "document", "who", "how", "with", "are", "the", "find", "search", "give", "can", "you", "for"}
         key_terms = [w for w in query_words if w not in stop_words]
 
         scored_sentences = []
         for c in context_chunks:
-            sentences = re.split(r'(?<=[.!?])\s+', c.get("text", ""))
+            sentences = re.split(r'[\r\n]+|(?<=[.!?])\s+', c.get("text", ""))
             for s in sentences:
                 s_lower = s.lower()
                 overlap = sum(1 for term in key_terms if term in s_lower)

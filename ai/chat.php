@@ -101,6 +101,8 @@ try {
                         "dateText" => "Priority: " . $targetPriority,
                         "priority" => $targetPriority,
                         "category" => $matchedDoc["category"],
+                        "file_path" => $matchedDoc["file_path"],
+                        "source" => "AI Vault",
                         "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
                     ]
                 ];
@@ -131,6 +133,8 @@ try {
                         "dateText" => "Priority: Unassigned",
                         "priority" => null,
                         "category" => $matchedDoc["category"],
+                        "file_path" => $matchedDoc["file_path"],
+                        "source" => "AI Vault",
                         "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
                     ]
                 ];
@@ -161,6 +165,8 @@ try {
                         "dateText" => !empty($currentPrio) ? "Priority: $currentPrio" : "Priority: Not Set",
                         "priority" => $currentPrio,
                         "category" => $matchedDoc["category"],
+                        "file_path" => $matchedDoc["file_path"],
+                        "source" => "AI Vault",
                         "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
                     ]
                 ];
@@ -225,6 +231,58 @@ try {
         $formatFilter = $searchIntent["format"];
 
         $matchedFiles = searchUserVaultDocuments($conn, $userId, $searchKeyword, $formatFilter);
+
+        // If SQL text match didn't find files, use RAG semantic retrieval on document content
+        if (empty($matchedFiles) && $searchAction !== "FILTER") {
+            $docStmt = $conn->prepare("SELECT id, title, format, file_size, file_path, category, priority, total_pages, content_text FROM documents WHERE user_id = ? AND content_text IS NOT NULL AND content_text != ''");
+            $docStmt->bind_param("i", $userId);
+            $docStmt->execute();
+            $dRes = $docStmt->get_result();
+            $userDocs = [];
+            while ($row = $dRes->fetch_assoc()) {
+                $userDocs[] = $row;
+            }
+            $docStmt->close();
+
+            if (!empty($userDocs)) {
+                aiSyncUserDocuments($userId, $userDocs);
+                $ragRes = aiRunRagChat($userId, $prompt, [], null);
+                if (!empty($ragRes["sources"])) {
+                    $baseUrl = getBaseUrl();
+                    $seenDocIds = [];
+                    foreach ($ragRes["sources"] as $s) {
+                        $sDocId = (int) ($s["id"] ?? 0);
+                        if (in_array($sDocId, $seenDocIds)) continue;
+                        $seenDocIds[] = $sDocId;
+
+                        foreach ($userDocs as $ud) {
+                            if ((int)$ud["id"] === $sDocId) {
+                                if (!empty($formatFilter) && !str_contains(strtoupper($ud["format"]), strtoupper($formatFilter))) {
+                                    continue;
+                                }
+                                $matchedFiles[] = [
+                                    "id" => $sDocId,
+                                    "title" => $ud["title"],
+                                    "format" => $ud["format"],
+                                    "size" => $ud["file_size"],
+                                    "dateText" => date("M j, Y", strtotime($ud["last_accessed"] ?? $ud["created_at"])),
+                                    "priority" => $ud["priority"],
+                                    "category" => $ud["category"],
+                                    "location" => $ud["location"] ?? "Internal Storage",
+                                    "file_url" => !empty($ud["file_path"]) ? ($baseUrl . $ud["file_path"]) : null,
+                                    "file_path" => $ud["file_path"],
+                                    "source" => "AI Vault",
+                                    "similarity" => $s["similarity"] ?? 0.0,
+                                    "snippet" => $s["snippet"] ?? (mb_substr($ud["content_text"], 0, 150) . "...")
+                                ];
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         $count = count($matchedFiles);
         $filesResult = $matchedFiles;
         $category = "SEARCH";
@@ -386,7 +444,8 @@ try {
                     "dateText" => $af["dateText"] ?? "Recent",
                     "priority" => $af["priority"] ?? null,
                     "category" => $af["category"] ?? "General",
-                    "file_url" => $af["file_url"] ?? null
+                    "file_url" => $af["file_url"] ?? null,
+                    "source" => "AI Vault"
                 ];
             }
         } else {
@@ -416,7 +475,9 @@ try {
                     "snippet" => $s["snippet"] ?? "",
                     "priority" => $matchedMeta["priority"] ?? null,
                     "category" => $matchedMeta["category"] ?? "General",
-                    "file_url" => !empty($matchedMeta["file_path"]) ? ($baseUrl . $matchedMeta["file_path"]) : null
+                    "file_url" => !empty($matchedMeta["file_path"]) ? ($baseUrl . $matchedMeta["file_path"]) : null,
+                    "file_path" => $matchedMeta["file_path"] ?? null,
+                    "source" => "AI Vault"
                 ];
             }
         }

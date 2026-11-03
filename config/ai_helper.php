@@ -451,13 +451,73 @@ function findUserDocumentByTitle($conn, int $userId, string $rawQueryTitle): ?ar
 }
 
 /**
+ * Extracts the search topic and optional format from natural language queries.
+ * Examples:
+ * - "Show the PDF containing machine learning notes" => topic: "machine learning notes", format: "PDF"
+ * - "Find the document where I wrote about Python" => topic: "Python", format: null
+ * - "I forgot the filename, but it contains information about cloud computing" => topic: "cloud computing", format: null
+ * - "Find my college assignment." => topic: "college assignment", format: null
+ */
+function extractSearchTopic(string $input): array {
+    $clean = trim($input);
+    $format = null;
+
+    if (preg_match('/\b(pdf|pdfs)\b/i', $clean)) {
+        $format = "PDF";
+    } elseif (preg_match('/\b(docx?|word)\b/i', $clean)) {
+        $format = "DOCX";
+    } elseif (preg_match('/\b(pptx?|powerpoint|slides?)\b/i', $clean)) {
+        $format = "PPTX";
+    } elseif (preg_match('/\b(xlsx?|excel|sheets?)\b/i', $clean)) {
+        $format = "XLSX";
+    } elseif (preg_match('/\b(txt|text)\b/i', $clean)) {
+        $format = "TXT";
+    }
+
+    $target = $clean;
+
+    $prefixPatterns = [
+        '/^(?:i\s+(?:forgot|don\'?t\s+remember)\s+the\s+filename[,\s]+(?:but\s+)?it\s+contains(?:\s+information\s+about|\s+notes\s+on|\s+info\s+about)?)\s+/i',
+        '/^(?:find|search(?:\s+for)?|where\s+is|where\s+are|look\s+for|show\s+me|show|locate|get)\s+(?:the\s+file\s+|the\s+document\s+|the\s+pdf\s+|the\s+word\s+doc\s+|my\s+|the\s+)?/i',
+        '/^(?:do\s+i\s+have|is\s+there)\s+(?:any\s+)?(?:files?\s+(?:on|for|about)\s+|my\s+|the\s+)?/i',
+        '/^(?:open|view|read|launch)\s+(?:the\s+file\s+|the\s+document\s+|my\s+|the\s+)?/i'
+    ];
+
+    foreach ($prefixPatterns as $p) {
+        $target = preg_replace($p, '', $target);
+    }
+
+    $connectorPatterns = [
+        '/\b(?:where\s+i\s+(?:wrote|talked|discussed|mentioned|wrote\s+about|talked\s+about)\s+about)\s+/i',
+        '/\b(?:where\s+i\s+(?:wrote|talked|discussed|mentioned))\s+/i',
+        '/\b(?:containing\s+(?:information\s+about|info\s+about|notes\s+on|notes\s+about)?)\s*/i',
+        '/\b(?:contains\s+(?:information\s+about|info\s+about|notes\s+on|notes\s+about)?)\s*/i',
+        '/\b(?:information\s+about|info\s+about|notes\s+on|notes\s+about|related\s+to)\s+/i',
+        '/\b(?:document\s+about|file\s+about|pdf\s+about)\s+/i',
+        '/^(?:the\s+pdf|the\s+file|the\s+document|my\s+document|my\s+file|my\s+pdf)\s+/i'
+    ];
+
+    foreach ($connectorPatterns as $cp) {
+        $target = preg_replace($cp, '', $target);
+    }
+
+    $target = preg_replace('/(\s+file|\s+document|\s+files|\s+documents)$/i', '', $target);
+    $target = trim($target, " \t\n\r\0\x0B'\".,?!");
+
+    return [
+        "topic" => $target,
+        "format" => $format
+    ];
+}
+
+/**
  * Detects whether a prompt in AI chat is asking to search, filter, or open a file.
  */
 function detectFileSearchIntent(string $prompt): ?array {
     $clean = trim($prompt);
 
     // Exclude RAG summaries / explanations / analysis
-    if (preg_match('/\b(summar|explain|key\s+point|compare|analysis|takeaway)\b/i', $clean)) {
+    if (preg_match('/\b(summar|explain\s+chapter|explain\s+section|key\s+point|compare|takeaway)\b/i', $clean)) {
         return null;
     }
 
@@ -497,42 +557,62 @@ function detectFileSearchIntent(string $prompt): ?array {
         ];
     }
 
-    // 3. FILE_SEARCH: e.g. "Show my Java notes", "Find assignment.pdf", "Search for project report", "Find my resume", "Where is my salary slip"
-    $searchPrefixes = [
-        '/^(?:find|search(?:\s+for)?|where\s+is|where\s+are|look\s+for|show\s+me|show|locate|get)\s+(?:files?\s+(?:containing|with)\s+)?(?:my\s+|the\s+)?(.+?)[.\?!]?$/i',
-        '/^(?:do\s+i\s+have|is\s+there)\s+(?:any\s+)?(?:files?\s+(?:on|for|about)\s+|my\s+|the\s+)?(.+?)\??$/i'
-    ];
-
-    foreach ($searchPrefixes as $pat) {
-        if (preg_match($pat, $clean, $m)) {
-            $target = trim($m[1], " \t\n\r\0\x0B'\"");
-            $target = preg_replace('/^(the\s+file\s+|the\s+document\s+|file\s+|document\s+)/i', '', $target);
-            $target = preg_replace('/(\s+file|\s+document|\s+files|\s+documents)$/i', '', $target);
-            $target = trim($target);
-
-            // Extract format if mentioned
-            $format = null;
-            if (preg_match('/\b(pdf|docx?|pptx?|txt|csv|xlsx?)\b/i', $target, $fm)) {
-                $format = strtoupper($fm[1]);
-            }
-
-            if (!empty($target)) {
-                return [
-                    "action" => "SEARCH",
-                    "query" => $target,
-                    "format" => $format
-                ];
-            }
-        }
-    }
-
-    // 4. Standalone filename with document extension (e.g. "assignment.pdf", "resume.docx", "notes.txt")
+    // 3. Standalone filename with document extension (e.g. "assignment.pdf", "resume.docx", "notes.txt")
     if (preg_match('/^([a-zA-Z0-9_\-\s\(\)]+\.(pdf|docx?|pptx?|xlsx?|txt|csv))[.\?!]?$/i', $clean, $m)) {
         return [
             "action" => "SEARCH",
             "query" => trim($m[1], " \t\n\r\0\x0B'\""),
             "format" => strtoupper(pathinfo($m[1], PATHINFO_EXTENSION))
         ];
+    }
+
+    // 4. Natural Language File Search & Content-Based Search:
+    // e.g. "Find my college assignment", "Show the PDF containing machine learning notes",
+    // "Find the document where I wrote about Python", "I forgot the filename, but it contains information about cloud computing"
+    $isSearchIntent = false;
+    if (preg_match('/^(?:find|search(?:\s+for)?|where\s+is|where\s+are|look\s+for|show\s+me|show|locate|get|do\s+i\s+have|is\s+there)\b/i', $clean)) {
+        $isSearchIntent = true;
+    } elseif (preg_match('/^(?:i\s+(?:forgot|don\'?t\s+remember)|which\s+file|which\s+document)\b/i', $clean)) {
+        $isSearchIntent = true;
+    } elseif (preg_match('/\b(containing|contains|notes\s+on|wrote\s+about|information\s+about)\b/i', $clean)) {
+        $isSearchIntent = true;
+    }
+
+    if ($isSearchIntent) {
+        $extracted = extractSearchTopic($clean);
+        $topic = $extracted["topic"];
+        $format = $extracted["format"];
+
+        if (!empty($topic)) {
+            return [
+                "action" => "SEARCH",
+                "query" => $topic,
+                "format" => $format
+            ];
+        }
+    }
+
+    // 5. Short keyword, name, or candidate filename query without question markers (1 to 5 words)
+    // e.g. "Ramesh Kumar", "assignment", "cloud computing notes", "John Doe", "doctor prescription"
+    $words = preg_split('/\s+/', $clean);
+    $wordCount = count($words);
+    if ($wordCount >= 1 && $wordCount <= 5) {
+        $firstWord = strtolower($words[0]);
+        $questionWords = [
+            'what', 'why', 'how', 'when', 'who', 'where', 'which',
+            'can', 'could', 'would', 'should', 'is', 'are', 'was',
+            'were', 'do', 'does', 'did', 'summarize', 'explain', 'compare', 'tell'
+        ];
+        if (!in_array($firstWord, $questionWords) && !str_ends_with($clean, '?')) {
+            $extracted = extractSearchTopic($clean);
+            $topic = !empty($extracted["topic"]) ? $extracted["topic"] : $clean;
+            $format = $extracted["format"];
+            return [
+                "action" => "SEARCH",
+                "query" => $topic,
+                "format" => $format
+            ];
+        }
     }
 
     return null;
@@ -611,10 +691,41 @@ function searchUserVaultDocuments($conn, int $userId, string $query, ?string $fo
 
     $baseUrl = getBaseUrl();
     $matched = [];
+    $seenTitles = [];
     while ($row = $res->fetch_assoc()) {
+        $cleanTitle = strtolower(trim($row["title"]));
+        if (in_array($cleanTitle, $seenTitles)) {
+            continue;
+        }
+        $seenTitles[] = $cleanTitle;
+
         $fileUrl = !empty($row["file_path"]) ? ($baseUrl . $row["file_path"]) : null;
         $dateText = date("M j, Y", strtotime($row["last_accessed"] ?? $row["created_at"]));
-        $snippet = !empty($row["content_text"]) ? (mb_substr($row["content_text"], 0, 150) . "...") : null;
+
+        $snippet = null;
+        if (!empty($row["content_text"])) {
+            $pos = false;
+            if ($cleanQuery !== "" && $cleanQuery !== "all" && $cleanQuery !== "files") {
+                $pos = mb_stripos($row["content_text"], $cleanQuery);
+            }
+            if ($pos === false && !empty($words)) {
+                foreach ($words as $w) {
+                    if (strlen($w) >= 3) {
+                        $p = mb_stripos($row["content_text"], $w);
+                        if ($p !== false) {
+                            $pos = $p;
+                            break;
+                        }
+                    }
+                }
+            }
+            if ($pos !== false) {
+                $start = max(0, $pos - 35);
+                $snippet = ($start > 0 ? "..." : "") . mb_substr($row["content_text"], $start, 140) . "...";
+            } else {
+                $snippet = mb_substr($row["content_text"], 0, 140) . "...";
+            }
+        }
 
         $matched[] = [
             "id" => (int) $row["id"],
