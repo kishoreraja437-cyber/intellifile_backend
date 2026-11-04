@@ -1,0 +1,102 @@
+Sat Oct 31 21:57:01 2026
+Alternative_Saves_Android_Port
+Ren'Py 8.1.1.23060707
+ 
+
+Bootstrap to the start of init.init. took 0.00s
+Bootstrap to the start of init.init. took 0.00s
+
+Manufacturer vivo Model I2403
+Android Version: 16
+Device Arch:  android-arm64_v8a
+
+Screen diagonal is 5.603372103083984 inches.
+Version: Ren'Py 8.1.1.23060707
+Early init. took 0.16s
+Early init. took 0.16s
+Attempting to sync your saves to/from stock ANDROID_PUBLIC location...
+Android search paths: /storage/emulated/0/Android/data/da.rtm/files/../../../../Documents/DA/da.rtm/game /data/user/0/da.rtm/files/game
+Loader init. took 0.24s
+Loader init. took 0.24s
+Loading error handling. took 0.68s
+Loading error handling. took 0.68s
+Loading script. took 5.05s
+Loading script. took 5.05s
+Saving to /storage/emulated/0/Android/data/da.rtm/files/../../../../Documents/DA/da.rtm
+Loading save slot metadata. took 0.15s
+Loading save slot metadata. took 0.15s
+Loading persistent. took 0.00s
+Loading persistent. took 0.00s
+Set script version to: (8, 1, 3)
+ - Init at 00images.rpyc:55 took 0.75306 s.
+ - Init at SanchoMod/SanchoMod RTM-SWM2.rpyc:4820 took 3.07719 s.
+Running init code. took 4.15s
+Running init code. took 4.15s
+Loading analysis data. took 0.21s
+Loading analysis data. took 0.21s
+Analyze and compile ATL. took 0.22s
+Analyze and compile ATL. took 0.22s
+Reloading save slot metadata. took 0.08s
+Reloading save slot metadata. took 0.08s
+Index archives took 0.00s
+Index archives took 0.00s
+Dump and make backups. took 0.00s
+Dump and make backups. took 0.00s
+Cleaning cache. took 0.00s
+Cleaning cache. took 0.00s
+Making clean stores. took 0.00s
+Making clean stores. took 0.00s
+Initial gc. took 1.30s
+Initial gc. took 1.30s
+DPI scale factor: 1.000000
+Creating interface object. took 0.02s
+Creating interface object. took 0.02s
+Cleaning stores took 0.01s
+Cleaning stores took 0.01s
+Init translation took 2.18s
+Init translation took 2.18s
+Build styles took 0.01s
+Build styles took 0.01s
+Load screen analysis took 0.29s
+Load screen analysis took 0.29s
+Analyze screens took 0.01s
+Analyze screens took 0.01s
+Save screen analysis took 0.00s
+Save screen analysis took 0.00s
+Prepare screens took 0.98s
+Prepare screens took 0.98s
+Save pyanalysis. took 0.00s
+Save pyanalysis. took 0.00s
+Save bytecode. took 0.00s
+Save bytecode. took 0.00s
+Running _start took 0.01s
+Running _start took 0.01s
+Interface start. took 1.05s
+Interface start. took 1.05s
+
+Initializing gles2 renderer:
+primary display bounds: (0, 0, 2287, 921)
+swap interval: 1 frames
+Fullscreen mode.
+Vendor: "b'ARM'"
+Renderer: b'Mali-G615 MC2'
+Version: b'OpenGL ES 3.2 v1.r44p1-01eac0.148b774f93332d7e562320793fb6c4c9'
+Display Info: None
+Screen sizes: virtual=(1920, 1080) physical=(2287, 1080) drawable=(2287, 1080)
+Maximum texture size: 4096x4096
+Total time until interface ready: 17.28314781188965s.
+Hid presplash.
+Entered background. --------------------------------------------
+Entering foreground. -------------------------------------------
+Screen sizes: virtual=(1920, 1080) physical=(2287, 1080) drawable=(2287, 1080)
+Maximum texture size: 4096x4096
+Entered background. --------------------------------------------
+Entering foreground. -------------------------------------------
+Screen sizes: virtual=(1920, 1080) physical=(2287, 1080) drawable=(2287, 1080)
+Maximum texture size: 4096x4096
+Screen sizes: virtual=(1920, 1080) physical=(2287, 921) drawable=(2287, 921)
+Maximum texture size: 4096x4096
+Flip failed error(b'The specified window has not been made current')
+Screen sizes: virtual=(1920, 1080) physical=(2287, 921) drawable=(2287, 921)
+Maximum texture size: 4096x4096
+Flip failed error(b'unable to show color buffer in an OS-native window (call to eglSwapBuffers failed, reporting an error of EGL_BAD_SURFACE)')
