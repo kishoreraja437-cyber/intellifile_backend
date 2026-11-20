@@ -35,9 +35,9 @@ class AppDataEngine:
         elif sub_intent == "SET_PRIORITY" or any(k in lower_q for k in ["set priority", "change priority", "update priority", "how to set priority"]):
             answer = (
                 "In IntelliFile, there are strictly two ways to set a document's priority:\n\n"
-                "1. **Manual**: Open the document in AI Vault or File Details, tap **Priority**, and choose **Important**, **Normal**, or **Low**.\n"
+                "1. **Manual**: Open the document in IntelliSpace or File Details, tap **Priority**, and choose **Important**, **Normal**, or **Low**.\n"
                 "2. **AI Chat Prompt**: Ask me anytime right here in chat! For example, say *\"Set priority of [Document Name] to important\"* or *\"Mark [Document Name] as normal\"*.\n\n"
-                "Files uploaded to AI Vault are never automatically assigned a priority. They remain unassigned until you choose to set one."
+                "Files uploaded to IntelliSpace are never automatically assigned a priority. They remain unassigned until you choose to set one."
             )
 
         # 2. Priority Statistics (Important files)
@@ -92,7 +92,7 @@ class AppDataEngine:
         # 7. Total Files / Document Count (default)
         else:
             if total_files == 0:
-                answer = "You currently have **0 files** stored in your IntelliFile repository. You can upload documents anytime from My Files or AI Vault."
+                answer = "You currently have **0 files** stored in your IntelliFile repository. You can upload documents anytime from My Files or IntelliSpace."
             else:
                 answer = (
                     f"You currently have a total of **{total_files} file{'s' if total_files != 1 else ''}** stored in your IntelliFile workspace."

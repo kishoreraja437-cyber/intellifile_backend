@@ -142,7 +142,7 @@ try {
 
             $aiResponseText = "In IntelliFile, there are strictly two ways to set a file's priority:\n\n" .
 
-                "1. **Manual**: Open the document in AI Vault or File Details, tap **Priority**, and choose **Important**, **Normal**, or **Low**.\n" .
+                "1. **Manual**: Open the document in IntelliSpace or File Details, tap **Priority**, and choose **Important**, **Normal**, or **Low**.\n" .
 
                 "2. **AI Chat Prompt**: You can ask me anytime right here! For example, try:\n" .
 
@@ -152,7 +152,7 @@ try {
 
                 "   • *\"Change priority of report.pdf to low\"*\n\n" .
 
-                "Files uploaded to AI Vault are never automatically assigned a priority. They remain unassigned until you choose to set one.";
+                "Files uploaded to IntelliSpace are never automatically assigned a priority. They remain unassigned until you choose to set one.";
 
             $category = "GENERAL";
 
@@ -180,7 +180,7 @@ try {
 
 
 
-                $aiResponseText = "I have updated the priority of '**{$matchedDoc['title']}**' to **{$targetPriority}** as requested.\n\nYou can view and filter this file under the {$targetPriority} priority section in your AI Vault and Saved screen.";
+                $aiResponseText = "I have updated the priority of '**{$matchedDoc['title']}**' to **{$targetPriority}** as requested.\n\nYou can view and filter this file under the {$targetPriority} priority section in your IntelliSpace and Saved screen.";
 
                 $category = "ANALYSIS";
 
@@ -206,7 +206,7 @@ try {
 
                         "file_path" => $matchedDoc["file_path"],
 
-                        "source" => "AI Vault",
+                        "source" => "IntelliSpace",
 
                         "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
 
@@ -216,7 +216,7 @@ try {
 
             } else {
 
-                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your AI Vault. Please check the document name and try again.";
+                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your IntelliSpace. Please check the document name and try again.";
 
                 $category = "SEARCH";
 
@@ -270,7 +270,7 @@ try {
 
                         "file_path" => $matchedDoc["file_path"],
 
-                        "source" => "AI Vault",
+                        "source" => "IntelliSpace",
 
                         "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
 
@@ -280,7 +280,7 @@ try {
 
             } else {
 
-                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your AI Vault.";
+                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your IntelliSpace.";
 
                 $category = "SEARCH";
 
@@ -334,7 +334,7 @@ try {
 
                         "file_path" => $matchedDoc["file_path"],
 
-                        "source" => "AI Vault",
+                        "source" => "IntelliSpace",
 
                         "file_url" => !empty($matchedDoc["file_path"]) ? ($baseUrl . $matchedDoc["file_path"]) : null
 
@@ -344,7 +344,7 @@ try {
 
             } else {
 
-                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your AI Vault.";
+                $aiResponseText = "I couldn't find a document matching '{$targetFile}' in your IntelliSpace.";
 
                 $category = "SEARCH";
 
@@ -544,7 +544,7 @@ try {
 
                                     "file_path" => $ud["file_path"],
 
-                                    "source" => "AI Vault",
+                                    "source" => "IntelliSpace",
 
                                     "similarity" => $s["similarity"] ?? 0.0,
 
@@ -592,7 +592,7 @@ try {
 
             } else {
 
-                $aiResponseText = "No matching files found for '**{$searchKeyword}**' in your AI Vault. Please verify the filename or upload the document.";
+                $aiResponseText = "No matching files found for '**{$searchKeyword}**' in your IntelliSpace. Please verify the filename or upload the document.";
 
             }
 
@@ -602,11 +602,11 @@ try {
 
             if ($count > 0) {
 
-                $aiResponseText = "Here are your **{$count} {$fmtLabel} file" . ($count > 1 ? "s" : "") . "** stored in your AI Vault:";
+                $aiResponseText = "Here are your **{$count} {$fmtLabel} file" . ($count > 1 ? "s" : "") . "** stored in your IntelliSpace:";
 
             } else {
 
-                $aiResponseText = "No {$fmtLabel} files found in your AI Vault.";
+                $aiResponseText = "No {$fmtLabel} files found in your IntelliSpace.";
 
             }
 
@@ -616,7 +616,7 @@ try {
 
             if ($count > 0) {
 
-                $aiResponseText = "I found **{$count} matching file" . ($count > 1 ? "s" : "") . "** for '**{$searchKeyword}**' in your AI Vault:";
+                $aiResponseText = "I found **{$count} matching file" . ($count > 1 ? "s" : "") . "** for '**{$searchKeyword}**' in your IntelliSpace:";
 
             } else {
 
@@ -892,7 +892,7 @@ try {
 
                     "file_url" => $af["file_url"] ?? null,
 
-                    "source" => "AI Vault"
+                    "source" => "IntelliSpace"
 
                 ];
 
@@ -956,7 +956,7 @@ try {
 
                     "file_path" => $matchedMeta["file_path"] ?? null,
 
-                    "source" => "AI Vault"
+                    "source" => "IntelliSpace"
 
                 ];
 

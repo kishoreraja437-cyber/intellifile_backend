@@ -738,7 +738,7 @@ function searchUserVaultDocuments($conn, int $userId, string $query, ?string $fo
             "location" => $row["location"],
             "file_url" => $fileUrl,
             "file_path" => $row["file_path"],
-            "source" => "AI Vault",
+            "source" => "IntelliSpace",
             "snippet" => $snippet
         ];
     }

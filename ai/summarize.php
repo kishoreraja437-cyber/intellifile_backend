@@ -67,9 +67,9 @@ if ($contentText === "") {
         "success" => true,
         "document_id" => $docId > 0 ? $docId : null,
         "title" => $title ?: "Document",
-        "summary" => "This document is securely stored in your AI Vault. No embedded text layers were detected for semantic extraction (it may be a scanned image or binary asset).",
+        "summary" => "This document is securely stored in your IntelliSpace. No embedded text layers were detected for semantic extraction (it may be a scanned image or binary asset).",
         "bullet_points" => [
-            "Stored securely in your AI Vault",
+            "Stored securely in your IntelliSpace",
             "Document format: " . ($doc["format"] ?? "Document"),
             "File size: " . ($doc["file_size"] ?? "Unknown"),
             "Total pages: " . ($doc["total_pages"] ?? 1)
