@@ -12,8 +12,28 @@ define("AI_SERVICE_URL", "http://127.0.0.1:5000");
 /**
  * Sends an HTTP POST request to local Python AI microservice.
  * Returns decoded associative array, or null if service is offline.
+ * Uses fast socket probing and per-request offline caching to prevent blocking delays.
  */
 function callPythonAiService(string $endpoint, array $payload, int $timeoutSeconds = 3): ?array {
+    static $serviceChecked = false;
+    static $serviceIsOnline = false;
+
+    // Fast socket probe once per PHP request: if port 5000 is not listening, don't wait on curl!
+    if (!$serviceChecked) {
+        $serviceChecked = true;
+        $fp = @fsockopen("127.0.0.1", 5000, $errno, $errstr, 0.05);
+        if ($fp) {
+            fclose($fp);
+            $serviceIsOnline = true;
+        } else {
+            $serviceIsOnline = false;
+        }
+    }
+
+    if (!$serviceIsOnline) {
+        return null;
+    }
+
     $url = rtrim(AI_SERVICE_URL, "/") . "/" . ltrim($endpoint, "/");
     $jsonData = json_encode($payload);
 
@@ -26,7 +46,7 @@ function callPythonAiService(string $endpoint, array $payload, int $timeoutSecon
             "Content-Type: application/json",
             "Content-Length: " . strlen($jsonData)
         ],
-        CURLOPT_CONNECTTIMEOUT => 2,
+        CURLOPT_CONNECTTIMEOUT_MS => 500,
         CURLOPT_TIMEOUT        => $timeoutSeconds,
         CURLOPT_SSL_VERIFYPEER => false,
         CURLOPT_SSL_VERIFYHOST => false
@@ -39,6 +59,7 @@ function callPythonAiService(string $endpoint, array $payload, int $timeoutSecon
 
     if ($response === false || $httpCode < 200 || $httpCode >= 300) {
         error_log("[AI BRIDGE] Failed connecting to {$url}: {$error} (HTTP {$httpCode})");
+        $serviceIsOnline = false;
         return null;
     }
 

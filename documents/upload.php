@@ -199,6 +199,51 @@ if (!$hasExplicitCategory) {
     }
 }
 
+// Check for existing document in IntelliSpace to prevent duplicates and enable instant sync
+$checkExisting = $conn->prepare("SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages, content_text, created_at FROM documents WHERE user_id = ? AND title = ? LIMIT 1");
+if ($checkExisting) {
+    $checkExisting->bind_param("is", $userId, $title);
+    $checkExisting->execute();
+    $existRes = $checkExisting->get_result();
+    if ($existingRow = $existRes->fetch_assoc()) {
+        $checkExisting->close();
+        $existingId = (int)$existingRow["id"];
+
+        // If newly uploaded physical file is provided, update path; otherwise keep existing
+        $finalPath = $savedRelativePath ?: $existingRow["file_path"];
+        $updateStmt = $conn->prepare("UPDATE documents SET file_path = ?, file_size = ?, category = ?, priority = COALESCE(?, priority), last_accessed = CURRENT_TIMESTAMP WHERE id = ?");
+        if ($updateStmt) {
+            $updateStmt->bind_param("ssssi", $finalPath, $fileSize, $category, $priority, $existingId);
+            $updateStmt->execute();
+            $updateStmt->close();
+        }
+
+        $fileUrl = $finalPath ? (getBaseUrl() . $finalPath) : null;
+        sendJsonResponse(200, [
+            "success" => true,
+            "message" => "Document synced to IntelliSpace successfully.",
+            "document" => [
+                "id" => $existingId,
+                "user_id" => $userId,
+                "title" => $title,
+                "format" => $format,
+                "file_size" => $fileSize,
+                "file_url" => $fileUrl,
+                "file_path" => $finalPath,
+                "category" => $category,
+                "location" => $location,
+                "priority" => $priority ?: $existingRow["priority"],
+                "total_pages" => $totalPages,
+                "has_text" => !empty($contentText) || !empty($existingRow["content_text"]),
+                "content_text" => $contentText ?: ($existingRow["content_text"] ?? ""),
+                "extracted_chars" => mb_strlen($contentText ?: ($existingRow["content_text"] ?? "")),
+                "created_at" => $existingRow["created_at"]
+            ]
+        ]);
+    }
+    $checkExisting->close();
+}
+
 try {
     $stmt = $conn->prepare("
         INSERT INTO documents (user_id, title, format, file_size, file_path, category, location, priority, total_pages, content_text)
