@@ -14,17 +14,17 @@ if ($_SERVER["REQUEST_METHOD"] !== "GET") {
 $userId = requireAuth($conn);
 
 try {
-    // Total Files count
-    $stmt = $conn->prepare("SELECT COUNT(*) AS total FROM documents WHERE user_id = ?");
+    // Total Files count (deduplicated by title)
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT LOWER(TRIM(title))) AS total FROM documents WHERE user_id = ?");
     $stmt->bind_param("i", $userId);
     $stmt->execute();
     $totalRow = $stmt->get_result()->fetch_assoc();
     $totalFiles = (int) ($totalRow["total"] ?? 0);
     $stmt->close();
 
-    // Priority counts
+    // Priority counts (deduplicated by title)
     $stmt = $conn->prepare("
-        SELECT priority, COUNT(*) AS count 
+        SELECT priority, COUNT(DISTINCT LOWER(TRIM(title))) AS count 
         FROM documents 
         WHERE user_id = ? 
         GROUP BY priority
@@ -51,9 +51,9 @@ try {
     $normalPct = ($totalFiles > 0) ? round(($normalCount / $totalFiles) * 100, 1) : 0;
     $lowPct = ($totalFiles > 0) ? round(($lowCount / $totalFiles) * 100, 1) : 0;
 
-    // Format counts
+    // Format counts (deduplicated by title)
     $stmt = $conn->prepare("
-        SELECT format, COUNT(*) AS count 
+        SELECT format, COUNT(DISTINCT LOWER(TRIM(title))) AS count 
         FROM documents 
         WHERE user_id = ? 
         GROUP BY format
@@ -67,8 +67,8 @@ try {
     }
     $stmt->close();
 
-    // Saved count
-    $stmt = $conn->prepare("SELECT COUNT(*) AS saved FROM documents WHERE user_id = ? AND is_saved = 1");
+    // Saved count (deduplicated by title)
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT LOWER(TRIM(title))) AS saved FROM documents WHERE user_id = ? AND (is_saved = 1 OR is_bookmarked = 1)");
     $stmt->bind_param("i", $userId);
     $stmt->execute();
     $sRow = $stmt->get_result()->fetch_assoc();
