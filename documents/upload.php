@@ -200,9 +200,10 @@ if (!$hasExplicitCategory) {
 }
 
 // Check for existing document in IntelliSpace to prevent duplicates and enable instant sync
-$checkExisting = $conn->prepare("SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages, content_text, created_at FROM documents WHERE user_id = ? AND title = ? LIMIT 1");
+// Handles files with identical names but different storage locations correctly
+$checkExisting = $conn->prepare("SELECT id, user_id, title, format, file_size, file_path, category, location, priority, total_pages, content_text, created_at FROM documents WHERE user_id = ? AND title = ? AND (location = ? OR location = 'Internal Storage' OR ? = 'Internal Storage') LIMIT 1");
 if ($checkExisting) {
-    $checkExisting->bind_param("is", $userId, $title);
+    $checkExisting->bind_param("isss", $userId, $title, $location, $location);
     $checkExisting->execute();
     $existRes = $checkExisting->get_result();
     if ($existingRow = $existRes->fetch_assoc()) {
@@ -211,9 +212,9 @@ if ($checkExisting) {
 
         // If newly uploaded physical file is provided, update path; otherwise keep existing
         $finalPath = $savedRelativePath ?: $existingRow["file_path"];
-        $updateStmt = $conn->prepare("UPDATE documents SET file_path = ?, file_size = ?, category = ?, priority = COALESCE(?, priority), last_accessed = CURRENT_TIMESTAMP WHERE id = ?");
+        $updateStmt = $conn->prepare("UPDATE documents SET file_path = ?, file_size = ?, category = ?, location = ?, priority = COALESCE(?, priority), last_accessed = CURRENT_TIMESTAMP WHERE id = ?");
         if ($updateStmt) {
-            $updateStmt->bind_param("ssssi", $finalPath, $fileSize, $category, $priority, $existingId);
+            $updateStmt->bind_param("sssssi", $finalPath, $fileSize, $category, $location, $priority, $existingId);
             $updateStmt->execute();
             $updateStmt->close();
         }
