@@ -259,11 +259,13 @@ if ($checkExisting) {
                 "content_text" => $contentText ?: ($existingRow["content_text"] ?? ""),
                 "extracted_chars" => mb_strlen($contentText ?: ($existingRow["content_text"] ?? "")),
                 "insight_status" => $existingInsight["status"] ?? "READY",
+                "document_overview" => $existingInsight["document_overview"] ?? $existingInsight["overview"] ?? "",
                 "insight_overview" => $existingInsight["overview"] ?? "",
                 "insight_topics" => $existingInsight["main_topics"] ?? [],
                 "insight_key_points" => $existingInsight["key_points"] ?? [],
-                "insight_details" => $existingInsight["important_details"] ?? [],
                 "insight_terms" => $existingInsight["important_terms"] ?? [],
+                "insight_insights" => $existingInsight["important_insights"] ?? $existingInsight["important_details"] ?? [],
+                "insight_details" => $existingInsight["important_details"] ?? [],
                 "insight_conclusion" => $existingInsight["conclusion"] ?? "",
                 "created_at" => $existingRow["created_at"]
             ]
@@ -318,11 +320,13 @@ try {
             "extracted_chars" => mb_strlen($contentText),
             "extraction_warning" => $extractionWarning,
             "insight_status" => "READY",
+            "document_overview" => $persistedInsight["document_overview"] ?? $persistedInsight["overview"] ?? "",
             "insight_overview" => $persistedInsight["overview"] ?? "",
             "insight_topics" => $persistedInsight["main_topics"] ?? [],
             "insight_key_points" => $persistedInsight["key_points"] ?? [],
-            "insight_details" => $persistedInsight["important_details"] ?? [],
             "insight_terms" => $persistedInsight["important_terms"] ?? [],
+            "insight_insights" => $persistedInsight["important_insights"] ?? $persistedInsight["important_details"] ?? [],
+            "insight_details" => $persistedInsight["important_details"] ?? [],
             "insight_conclusion" => $persistedInsight["conclusion"] ?? "",
             "created_at" => date("Y-m-d H:i:s")
         ]

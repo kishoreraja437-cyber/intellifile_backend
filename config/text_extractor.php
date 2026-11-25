@@ -12,7 +12,41 @@ if (!defined("MAX_DOCUMENT_FILE_SIZE")) {
     define("MAX_DOCUMENT_FILE_SIZE", 25 * 1024 * 1024); // 25 MB
 }
 if (!defined("MAX_EXTRACTED_TEXT_CHARS")) {
-    define("MAX_EXTRACTED_TEXT_CHARS", 100000); // 100k chars for DB
+    define("MAX_EXTRACTED_TEXT_CHARS", 250000); // 250k chars for comprehensive DB indexing
+}
+
+/**
+ * Extracts embedded text from images using native Windows OCR engine.
+ */
+function extractTextFromImage(string $filePath): array {
+    if (!file_exists($filePath) || filesize($filePath) === 0) {
+        return ['success' => false, 'error' => 'Image file is empty or does not exist.', 'text' => '', 'page_count' => 0];
+    }
+
+    $ocrScript = __DIR__ . '/../ai_service/ocr_helper.ps1';
+    $ext = strtoupper(pathinfo($filePath, PATHINFO_EXTENSION));
+    $text = "";
+
+    if (file_exists($ocrScript)) {
+        $realPath = realpath($filePath);
+        $cmd = 'powershell.exe -ExecutionPolicy Bypass -NoProfile -File ' . escapeshellarg($ocrScript) . ' -ImagePath ' . escapeshellarg($realPath);
+        $output = @shell_exec($cmd);
+        if ($output !== null) {
+            $text = trim($output);
+        }
+    }
+
+    $safeText = mb_substr($text, 0, MAX_EXTRACTED_TEXT_CHARS);
+
+    return [
+        'success' => true,
+        'text' => $safeText,
+        'page_count' => 1,
+        'char_count' => mb_strlen($safeText),
+        'is_scanned' => empty($safeText),
+        'warning' => empty($safeText) ? 'No text detected in image via OCR.' : null,
+        'format' => $ext
+    ];
 }
 
 /**
@@ -1059,15 +1093,7 @@ function extractDocumentText(string $filePath, string $ext): array {
         case 'jpg':
         case 'jpeg':
         case 'webp':
-            return [
-                'success' => true,
-                'text' => '',
-                'page_count' => 1,
-                'char_count' => 0,
-                'is_scanned' => true,
-                'warning' => 'Image document uploaded without embedded text layer.',
-                'format' => strtoupper($cleanExt)
-            ];
+            return extractTextFromImage($filePath);
 
         default:
             return extractTextGenericFallback($filePath, $cleanExt);

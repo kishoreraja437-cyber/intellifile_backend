@@ -99,21 +99,24 @@ def run_generate_insight(title: str, content: str, doc_format: str = "") -> dict
             "title": clean_title,
             "format": upper_format,
             "status": "READY",
+            "document_overview": f"{clean_title} is securely stored in your IntelliSpace as a {upper_format} asset.",
             "overview": f"{clean_title} is securely stored in your IntelliSpace as a {upper_format} asset.",
-            "main_topics": [f"{clean_title} Overview", f"{upper_format} Structure", "Asset Metadata"],
+            "main_topics": ["Document Content Analysis", "File Structure"],
             "key_points": [f"Document format: {upper_format}", "Stored securely in IntelliSpace"],
-            "important_details": [f"File name: {clean_title}", f"Format: {upper_format}", "Indexed in IntelliSpace"],
-            "important_terms": [f"{upper_format} — Document container specification"],
+            "important_terms": ["No specialized technical terms or definitions detected in this document."],
+            "important_insights": ["No quantitative metrics, analytical findings, or statistical observations identified in this document."],
+            "important_details": ["No quantitative metrics, analytical findings, or statistical observations identified in this document."],
             "conclusion": f"{clean_title} has been successfully indexed in your IntelliSpace repository.",
             "summary": f"{clean_title} is securely stored in your IntelliSpace as a {upper_format} asset.",
             "bullet_points": [f"Document format: {upper_format}", "Stored securely in IntelliSpace"],
-            "sentence_count": 0
+            "sentence_count": 0,
+            "char_count": 0
         }
 
     sentences = split_into_sentences(content)
     total_chars = len(content)
 
-    # 1. Overview Synthesis (2-3 sentences)
+    # 1. Document Overview (2-3 sentences explaining what the uploaded file is about)
     intro_candidates = [s for s in sentences if any(w in s.lower() for w in ['overview', 'summary', 'purpose', 'introduction', 'is an', 'designed to', 'helps', 'provides'])]
     if len(intro_candidates) >= 2:
         overview = " ".join(intro_candidates[:3])
@@ -122,9 +125,8 @@ def run_generate_insight(title: str, content: str, doc_format: str = "") -> dict
     else:
         overview = f"{clean_title} is an indexed {upper_format} file in IntelliSpace."
 
-    # 2. Main Topics
+    # 2. Main Topics (important topics and subtopics discussed in the file)
     topics = []
-    # Check headings, slide tags, sheet tags
     h_matches = re.findall(r'(?:##|#|===|Worksheet:|Slide\s+\d+:?)\s*([^\n\r]+)', content, re.IGNORECASE)
     for h in h_matches:
         h_clean = re.sub(r'[-•*:=#|]', '', h).strip()
@@ -147,9 +149,9 @@ def run_generate_insight(title: str, content: str, doc_format: str = "") -> dict
                 break
 
     if not topics:
-        topics = [os.path.splitext(clean_title)[0], f"{upper_format} Content Analysis", "Document Structure"]
+        topics = ["No distinct subtopics or section headings identified in this document."]
 
-    # 3. Key Points (scored sentences)
+    # 3. Key Points (most important information as clear bullet points)
     importance_keywords = ['important', 'key', 'critical', 'feature', 'system', 'result', 'finding', 'provides', 'includes', 'requirement', 'objective', 'architecture', 'model', 'benefit', 'standard']
     scored = []
     for idx, s in enumerate(sentences):
@@ -167,24 +169,7 @@ def run_generate_insight(title: str, content: str, doc_format: str = "") -> dict
     top_items = sorted(scored[:7], key=lambda x: x[1])
     key_points = [item[2] for item in top_items] if top_items else sentences[:min(5, len(sentences))]
 
-    # 4. Important Details (numbers, metrics, formulas, rows)
-    details = []
-    for s in sentences:
-        if re.search(r'(?:\$|€|₹|Rs\.?|USD|\b\d+(?:\.\d+)?%|\b\d{4}\b|\b\d+,\d+|\b\d+\s*(?:MB|KB|GB|users|records|days|months|hours|parameters|accuracy)\b)', s, re.IGNORECASE):
-            if s not in details and s not in key_points:
-                details.append(s)
-        if len(details) >= 6:
-            break
-    if len(details) < 3:
-        row_matches = re.findall(r'(?:Row\s+\d+|Headers?):[^\n]+', content, re.IGNORECASE)
-        for rm in row_matches[:5]:
-            clean_rm = rm.strip()
-            if clean_rm not in details:
-                details.append(clean_rm)
-    if not details:
-        details = [f"Document format: {upper_format}", f"Extracted text volume: {total_chars} characters", f"Indexed sections: {len(topics)}"]
-
-    # 5. Important Terms & Definitions
+    # 4. Important Terms (technical terms, keywords, and their meanings from file content)
     terms = []
     acronyms = list(dict.fromkeys(re.findall(r'\b([A-Z]{2,6})\b', content)))
     common_filter = {'THE', 'AND', 'FOR', 'NOT', 'ALL', 'CAN', 'NEW', 'DOC', 'PDF', 'CSV', 'XLS', 'PPT', 'XML', 'TXT', 'ZIP'}
@@ -207,13 +192,26 @@ def run_generate_insight(title: str, content: str, doc_format: str = "") -> dict
             if len(terms) >= 6:
                 break
     if not terms:
-        terms = [
-            f"Document Domain — {topics[0] if topics else 'General Analysis'}",
-            "Processing Tier — IntelliSpace Universal Extraction",
-            f"File Architecture — Structured {upper_format} Specification"
-        ]
+        terms = ["No specialized technical terms or definitions detected in this document."]
 
-    # 6. Conclusion
+    # 5. Important Insights (valuable facts, findings, observations, metrics, data rows)
+    insights = []
+    for s in sentences:
+        if re.search(r'(?:\$|€|₹|Rs\.?|USD|\d+(?:\.\d+)?%|\b\d{4}\b|\b\d+,\d+|\b\d+\s*(?:MB|KB|GB|users|records|days|months|hours|parameters|accuracy)\b)', s, re.IGNORECASE):
+            if s not in insights:
+                insights.append(s)
+        if len(insights) >= 7:
+            break
+    if len(insights) < 3:
+        row_matches = re.findall(r'(?:Row\s+\d+|Headers?):[^\n]+', content, re.IGNORECASE)
+        for rm in row_matches[:5]:
+            clean_rm = rm.strip()
+            if clean_rm not in insights:
+                insights.append(clean_rm)
+    if not insights:
+        insights = ["No quantitative metrics, analytical findings, or statistical observations identified in this document."]
+
+    # 6. Conclusion (concise overall conclusion based on complete file content)
     conclusion = ""
     if len(sentences) > 3:
         conclusion_candidates = [s for s in sentences[-6:] if any(w in s.lower() for w in ['conclu', 'summary', 'overall', 'future', 'recommend', 'result', 'thus', 'therefore'])]
@@ -229,11 +227,13 @@ def run_generate_insight(title: str, content: str, doc_format: str = "") -> dict
         "title": clean_title,
         "format": upper_format,
         "status": "READY",
+        "document_overview": overview,
         "overview": overview,
         "main_topics": list(dict.fromkeys(topics)),
         "key_points": list(dict.fromkeys(key_points)),
-        "important_details": list(dict.fromkeys(details)),
         "important_terms": list(dict.fromkeys(terms)),
+        "important_insights": list(dict.fromkeys(insights)),
+        "important_details": list(dict.fromkeys(insights)),
         "conclusion": conclusion,
         "summary": overview,
         "bullet_points": list(dict.fromkeys(key_points)),

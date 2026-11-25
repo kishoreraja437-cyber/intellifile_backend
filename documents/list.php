@@ -20,7 +20,7 @@ $categoryFilter = trim($_GET["category"] ?? "");
 $sort = strtolower(trim($_GET["sort"] ?? "recent"));
 
 $sql = "SELECT id, user_id, title, format, file_size, file_path, category, location, priority, is_bookmarked, is_saved, total_pages, content_text, 
-               insight_status, insight_overview, insight_topics, insight_key_points, insight_details, insight_terms, insight_conclusion, insight_error,
+               insight_status, insight_overview, insight_topics, insight_key_points, insight_insights, insight_details, insight_terms, insight_conclusion, insight_error,
                last_accessed, created_at 
         FROM documents 
         WHERE user_id = ?";
@@ -101,8 +101,9 @@ try {
         if (!is_array($topics)) $topics = [];
         $keyPoints = json_decode($row["insight_key_points"] ?? "[]", true);
         if (!is_array($keyPoints)) $keyPoints = [];
-        $details = json_decode($row["insight_details"] ?? "[]", true);
-        if (!is_array($details)) $details = [];
+        $insights = json_decode($row["insight_insights"] ?? $row["insight_details"] ?? "[]", true);
+        if (!is_array($insights)) $insights = [];
+        $details = $insights;
         $terms = json_decode($row["insight_terms"] ?? "[]", true);
         if (!is_array($terms)) $terms = [];
 
@@ -125,12 +126,20 @@ try {
             "has_text" => $hasText,
             "content_text_length" => mb_strlen($contentText),
             "insight_status" => $row["insight_status"] ?: "PENDING",
+            "document_overview" => $row["insight_overview"] ?: "",
             "insight_overview" => $row["insight_overview"] ?: "",
             "insight_topics" => $topics,
+            "main_topics" => $topics,
             "insight_key_points" => $keyPoints,
-            "insight_details" => $details,
+            "key_points" => $keyPoints,
             "insight_terms" => $terms,
+            "important_terms" => $terms,
+            "insight_insights" => $insights,
+            "important_insights" => $insights,
+            "insight_details" => $details,
+            "important_details" => $details,
             "insight_conclusion" => $row["insight_conclusion"] ?: "",
+            "conclusion" => $row["insight_conclusion"] ?: "",
             "insight_error" => $row["insight_error"],
             "dateText" => date("M j, Y", strtotime($row["last_accessed"])),
             "created_at" => $row["created_at"],
