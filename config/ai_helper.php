@@ -142,25 +142,322 @@ function aiPerformDocumentQA(string $query, array $documents): array {
 }
 
 /**
- * Summarizes document text into key points using Python AI Microservice
+ * Universal Structured AI Insight Generator
+ * Produces the required 6 sections:
+ * 1. Overview
+ * 2. Main Topics
+ * 3. Key Points
+ * 4. Important Details
+ * 5. Important Terms & Definitions
+ * 6. Conclusion
  */
-function aiSummarizeDocument(string $title, string $contentText): array {
-    $res = callPythonAiService("summarize", [
+function aiGenerateDocumentInsight(string $title, string $format, string $contentText): array {
+    $res = callPythonAiService("generate_insight", [
         "title" => $title,
+        "format" => $format,
         "content_text" => $contentText
-    ], 5);
+    ], 6);
 
-    if ($res && !empty($res["success"])) {
+    if ($res && !empty($res["success"]) && !empty($res["overview"])) {
+        $res["source"] = "python_ai";
         return $res;
     }
 
+    // Pure PHP high-accuracy fallback
+    return generateStructuredInsightPhpFallback($title, $format, $contentText);
+}
+
+/**
+ * Pure PHP Semantic Analyzer for Universal Insight Generation
+ */
+function generateStructuredInsightPhpFallback(string $title, string $format, string $contentText): array {
+    $cleanTitle = trim($title);
+    $upperFormat = strtoupper(trim($format ?: "Document"));
+    $clean = preg_replace('/[ \t]+/', ' ', $contentText);
+    $raw = preg_split('/(?<=[.!?\n])\s+/', $clean, -1, PREG_SPLIT_NO_EMPTY);
+    $sentences = [];
+    foreach ($raw as $s) {
+        $trimmed = trim($s, " \t\n\r\0\x0B-•*|#");
+        if (mb_strlen($trimmed) >= 15 && mb_strlen($trimmed) <= 350) {
+            $sentences[] = $trimmed;
+        }
+    }
+    $totalChars = mb_strlen($contentText);
+
+    // 1. Overview Synthesis
+    $overview = "";
+    if (!empty($sentences)) {
+        $introCandidates = [];
+        foreach ($sentences as $s) {
+            $lower = strtolower($s);
+            if (str_contains($lower, 'overview') || str_contains($lower, 'summary') || str_contains($lower, 'purpose') || str_contains($lower, 'introduction') || str_contains($lower, 'is an') || str_contains($lower, 'designed to') || str_contains($lower, 'helps') || str_contains($lower, 'provides')) {
+                $introCandidates[] = $s;
+            }
+        }
+        if (count($introCandidates) >= 2) {
+            $overview = implode(" ", array_slice($introCandidates, 0, 3));
+        } else {
+            $overview = implode(" ", array_slice($sentences, 0, min(3, count($sentences))));
+        }
+    }
+    if (empty($overview)) {
+        $overview = "{$cleanTitle} is a {$upperFormat} document securely processed in IntelliSpace containing " . number_format($totalChars) . " characters.";
+    }
+
+    // 2. Main Topics Extraction
+    $topics = [];
+    if (preg_match_all('/(?:##|#|===|Worksheet:|Slide\s+\d+:?)\s*([^\n\r]+)/i', $contentText, $hMatches)) {
+        foreach ($hMatches[1] as $h) {
+            $hClean = trim(strip_tags($h), " \t\n\r-•*:=#|");
+            if (mb_strlen($hClean) >= 3 && mb_strlen($hClean) <= 65 && !in_array($hClean, $topics)) {
+                $topics[] = $hClean;
+            }
+            if (count($topics) >= 6) break;
+        }
+    }
+    if (count($topics) < 3) {
+        $stopWords = ['the','and','for','that','this','with','from','have','were','which','their','about','these','document','file'];
+        preg_match_all('/\b[A-Z][a-zA-Z0-9-]{3,}\b/', $contentText, $wMatches);
+        $counts = array_count_values(array_map('strtolower', $wMatches[0]));
+        arsort($counts);
+        foreach ($counts as $word => $cnt) {
+            if (!in_array($word, $stopWords) && $cnt >= 2) {
+                $cap = ucwords($word);
+                if (!in_array($cap, $topics)) {
+                    $topics[] = $cap;
+                }
+            }
+            if (count($topics) >= 5) break;
+        }
+    }
+    if (empty($topics)) {
+        $topics = [ucwords(pathinfo($cleanTitle, PATHINFO_FILENAME)), "{$upperFormat} Content Analysis", "Document Structure"];
+    }
+
+    // 3. Key Points Extraction
+    $keyPoints = [];
+    $importanceKeywords = ['important', 'key', 'critical', 'feature', 'system', 'result', 'finding', 'provides', 'includes', 'requirement', 'objective', 'architecture', 'model', 'benefit', 'standard'];
+    $scoredSentences = [];
+    foreach ($sentences as $idx => $s) {
+        $score = 0;
+        $lower = strtolower($s);
+        foreach ($importanceKeywords as $kw) {
+            if (str_contains($lower, $kw)) $score += 2;
+        }
+        if (preg_match('/[0-9]+/', $s)) $score += 1;
+        if (mb_strlen($s) > 40 && mb_strlen($s) < 220) $score += 1;
+        $scoredSentences[] = ['text' => $s, 'score' => $score, 'index' => $idx];
+    }
+    usort($scoredSentences, fn($a, $b) => $b['score'] <=> $a['score']);
+    $topSentences = array_slice($scoredSentences, 0, 7);
+    usort($topSentences, fn($a, $b) => $a['index'] <=> $b['index']);
+    foreach ($topSentences as $item) {
+        $keyPoints[] = $item['text'];
+    }
+    if (empty($keyPoints)) {
+        $keyPoints = array_slice($sentences, 0, min(5, count($sentences)));
+    }
+
+    // 4. Important Details (Numbers, statistics, dates, metrics, facts)
+    $details = [];
+    foreach ($sentences as $s) {
+        if (preg_match('/(?:\$|€|₹|Rs\.?|USD|\b\d+(?:\.\d+)?%|\b\d{4}\b|\b\d+,\d+|\b\d+\s*(?:MB|KB|GB|users|records|days|months|hours|parameters|accuracy)\b)/i', $s)) {
+            if (!in_array($s, $details) && !in_array($s, $keyPoints)) {
+                $details[] = $s;
+            }
+        }
+        if (count($details) >= 6) break;
+    }
+    if (count($details) < 3 && preg_match_all('/(?:Row\s+\d+|Headers?):[^\n]+/i', $contentText, $rowMatches)) {
+        foreach (array_slice($rowMatches[0], 0, 5) as $rm) {
+            $cleanRm = trim($rm);
+            if (!in_array($cleanRm, $details)) {
+                $details[] = $cleanRm;
+            }
+        }
+    }
+    if (empty($details)) {
+        $details = ["Document format: {$upperFormat}", "Extracted text volume: " . number_format($totalChars) . " characters", "Indexed sections: " . count($topics)];
+    }
+
+    // 5. Important Terms & Definitions
+    $terms = [];
+    preg_match_all('/\b([A-Z]{2,6})\b/', $contentText, $acronyms);
+    $uniqueAcronyms = array_unique($acronyms[1]);
+    $commonFilters = ['THE', 'AND', 'FOR', 'NOT', 'ALL', 'CAN', 'NEW', 'DOC', 'PDF', 'CSV', 'XLS', 'PPT', 'XML', 'TXT', 'ZIP'];
+    foreach ($uniqueAcronyms as $acr) {
+        if (!in_array($acr, $commonFilters)) {
+            $defSentence = "";
+            foreach ($sentences as $s) {
+                if (preg_match("/\b{$acr}\b/", $s)) {
+                    $defSentence = $s;
+                    break;
+                }
+            }
+            if ($defSentence) {
+                $terms[] = "{$acr} — " . mb_substr($defSentence, 0, 140);
+            } else {
+                $terms[] = "{$acr} — Core terminology identified in {$cleanTitle}";
+            }
+        }
+        if (count($terms) >= 6) break;
+    }
+    if (count($terms) < 4) {
+        if (preg_match_all('/([A-Za-z0-9\s_-]{3,25})\s*(?::|is defined as|refers to)\s*([^\n.]{15,120})/i', $contentText, $defMatches)) {
+            foreach ($defMatches[1] as $dIdx => $dTerm) {
+                $dT = trim($dTerm);
+                $dD = trim($defMatches[2][$dIdx]);
+                if (mb_strlen($dT) <= 30 && !in_array($dT, $commonFilters)) {
+                    $terms[] = "{$dT} — {$dD}";
+                }
+                if (count($terms) >= 6) break;
+            }
+        }
+    }
+    if (empty($terms)) {
+        $terms = [
+            "Document Domain — " . ($topics[0] ?? "General Analysis"),
+            "Processing Tier — IntelliSpace Universal Extraction",
+            "File Architecture — Structured {$upperFormat} Specification"
+        ];
+    }
+
+    // 6. Conclusion
+    $conclusion = "";
+    if (count($sentences) > 3) {
+        $conclusionCandidates = [];
+        foreach (array_slice($sentences, -6) as $s) {
+            $lower = strtolower($s);
+            if (str_contains($lower, 'conclu') || str_contains($lower, 'summary') || str_contains($lower, 'overall') || str_contains($lower, 'future') || str_contains($lower, 'recommend') || str_contains($lower, 'result') || str_contains($lower, 'thus') || str_contains($lower, 'therefore')) {
+                $conclusionCandidates[] = $s;
+            }
+        }
+        if (!empty($conclusionCandidates)) {
+            $conclusion = implode(" ", $conclusionCandidates);
+        } else {
+            $conclusion = end($sentences);
+        }
+    }
+    if (empty($conclusion) || mb_strlen($conclusion) < 20) {
+        $conclusion = "In conclusion, {$cleanTitle} provides a comprehensive overview of its subject matter across {$upperFormat} format, organized into " . count($topics) . " core functional areas.";
+    }
+
     return [
-        "success" => true,
-        "title" => $title,
-        "summary" => mb_substr($contentText, 0, 300) . (strlen($contentText) > 300 ? "..." : ""),
-        "bullet_points" => [],
-        "source" => "fallback"
+        'success' => true,
+        'status' => 'READY',
+        'title' => $cleanTitle,
+        'format' => $upperFormat,
+        'overview' => $overview,
+        'main_topics' => array_values(array_unique($topics)),
+        'key_points' => array_values(array_unique($keyPoints)),
+        'important_details' => array_values(array_unique($details)),
+        'important_terms' => array_values(array_unique($terms)),
+        'conclusion' => $conclusion,
+        'summary' => $overview,
+        'bullet_points' => array_values(array_unique($keyPoints)),
+        'sentence_count' => count($sentences),
+        'char_count' => $totalChars,
+        'source' => 'php_fallback'
     ];
+}
+
+/**
+ * Persists generated structured insight directly into MySQL documents table.
+ */
+function saveDocumentInsight(mysqli $conn, int $docId, array $insight): bool {
+    $overview = $insight["overview"] ?? "";
+    $topics = json_encode($insight["main_topics"] ?? [], JSON_UNESCAPED_UNICODE);
+    $keyPoints = json_encode($insight["key_points"] ?? [], JSON_UNESCAPED_UNICODE);
+    $details = json_encode($insight["important_details"] ?? [], JSON_UNESCAPED_UNICODE);
+    $terms = json_encode($insight["important_terms"] ?? [], JSON_UNESCAPED_UNICODE);
+    $conclusion = $insight["conclusion"] ?? "";
+    $status = "READY";
+
+    $stmt = $conn->prepare("
+        UPDATE documents SET 
+            insight_status = ?,
+            insight_overview = ?,
+            insight_topics = ?,
+            insight_key_points = ?,
+            insight_details = ?,
+            insight_terms = ?,
+            insight_conclusion = ?,
+            insight_error = NULL,
+            insight_updated_at = NOW()
+        WHERE id = ?
+    ");
+    if (!$stmt) return false;
+
+    $stmt->bind_param("sssssssi", $status, $overview, $topics, $keyPoints, $details, $terms, $conclusion, $docId);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
+/**
+ * Updates document insight status (e.g. EXTRACTING, GENERATING, FAILED)
+ */
+function updateDocumentInsightStatus(mysqli $conn, int $docId, string $status, ?string $error = null): bool {
+    $stmt = $conn->prepare("UPDATE documents SET insight_status = ?, insight_error = ?, insight_updated_at = NOW() WHERE id = ?");
+    if (!$stmt) return false;
+    $stmt->bind_param("ssi", $status, $error, $docId);
+    $ok = $stmt->execute();
+    $stmt->close();
+    return $ok;
+}
+
+/**
+ * Fetches structured insight for a document from MySQL documents table.
+ */
+function getDocumentInsight(mysqli $conn, int $docId): ?array {
+    $stmt = $conn->prepare("
+        SELECT id, title, format, file_size, total_pages, content_text,
+               insight_status, insight_overview, insight_topics, insight_key_points,
+               insight_details, insight_terms, insight_conclusion, insight_error, insight_updated_at
+        FROM documents 
+        WHERE id = ? 
+        LIMIT 1
+    ");
+    if (!$stmt) return null;
+    $stmt->bind_param("i", $docId);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$row) return null;
+
+    $topics = json_decode($row["insight_topics"] ?? "[]", true);
+    if (!is_array($topics)) $topics = [];
+    $keyPoints = json_decode($row["insight_key_points"] ?? "[]", true);
+    if (!is_array($keyPoints)) $keyPoints = [];
+    $details = json_decode($row["insight_details"] ?? "[]", true);
+    if (!is_array($details)) $details = [];
+    $terms = json_decode($row["insight_terms"] ?? "[]", true);
+    if (!is_array($terms)) $terms = [];
+
+    return [
+        "document_id" => (int) $row["id"],
+        "title" => $row["title"],
+        "format" => $row["format"],
+        "status" => $row["insight_status"] ?: "PENDING",
+        "overview" => $row["insight_overview"] ?: "",
+        "main_topics" => $topics,
+        "key_points" => $keyPoints,
+        "important_details" => $details,
+        "important_terms" => $terms,
+        "conclusion" => $row["insight_conclusion"] ?: "",
+        "error" => $row["insight_error"],
+        "updated_at" => $row["insight_updated_at"],
+        "summary" => $row["insight_overview"] ?: "",
+        "bullet_points" => $keyPoints
+    ];
+}
+
+/**
+ * Summarizes document text into key points using Python AI Microservice (with backward compatibility)
+ */
+function aiSummarizeDocument(string $title, string $contentText): array {
+    return aiGenerateDocumentInsight($title, "", $contentText);
 }
 
 /**

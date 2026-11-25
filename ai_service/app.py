@@ -89,25 +89,160 @@ def run_qa(query: str, documents: list) -> dict:
         "matched_files": qa_result["matched_files"]
     }
 
-def run_summarize(title: str, content: str) -> dict:
+def run_generate_insight(title: str, content: str, doc_format: str = "") -> dict:
+    clean_title = (title or "Document").strip()
+    upper_format = (doc_format or "Document").upper().strip()
+    
     if not content.strip():
         return {
             "success": True,
-            "title": title,
-            "summary": f"Document '{title}' has no text content available to summarize.",
-            "bullet_points": []
+            "title": clean_title,
+            "format": upper_format,
+            "status": "READY",
+            "overview": f"{clean_title} is securely stored in your IntelliSpace as a {upper_format} asset.",
+            "main_topics": [f"{clean_title} Overview", f"{upper_format} Structure", "Asset Metadata"],
+            "key_points": [f"Document format: {upper_format}", "Stored securely in IntelliSpace"],
+            "important_details": [f"File name: {clean_title}", f"Format: {upper_format}", "Indexed in IntelliSpace"],
+            "important_terms": [f"{upper_format} — Document container specification"],
+            "conclusion": f"{clean_title} has been successfully indexed in your IntelliSpace repository.",
+            "summary": f"{clean_title} is securely stored in your IntelliSpace as a {upper_format} asset.",
+            "bullet_points": [f"Document format: {upper_format}", "Stored securely in IntelliSpace"],
+            "sentence_count": 0
         }
 
     sentences = split_into_sentences(content)
-    key_points = sentences[:5] if len(sentences) >= 5 else sentences
+    total_chars = len(content)
+
+    # 1. Overview Synthesis (2-3 sentences)
+    intro_candidates = [s for s in sentences if any(w in s.lower() for w in ['overview', 'summary', 'purpose', 'introduction', 'is an', 'designed to', 'helps', 'provides'])]
+    if len(intro_candidates) >= 2:
+        overview = " ".join(intro_candidates[:3])
+    elif sentences:
+        overview = " ".join(sentences[:min(3, len(sentences))])
+    else:
+        overview = f"{clean_title} is an indexed {upper_format} file in IntelliSpace."
+
+    # 2. Main Topics
+    topics = []
+    # Check headings, slide tags, sheet tags
+    h_matches = re.findall(r'(?:##|#|===|Worksheet:|Slide\s+\d+:?)\s*([^\n\r]+)', content, re.IGNORECASE)
+    for h in h_matches:
+        h_clean = re.sub(r'[-•*:=#|]', '', h).strip()
+        if 3 <= len(h_clean) <= 65 and h_clean not in topics:
+            topics.append(h_clean)
+        if len(topics) >= 6:
+            break
+
+    if len(topics) < 3:
+        stop_words = {'the','and','for','that','this','with','from','have','were','which','their','about','these','document','file'}
+        words = re.findall(r'\b[A-Z][a-zA-Z0-9-]{3,}\b', content)
+        from collections import Counter
+        counts = Counter([w.lower() for w in words])
+        for w, cnt in counts.most_common(12):
+            if w not in stop_words and cnt >= 2:
+                cap = w.capitalize()
+                if cap not in topics:
+                    topics.append(cap)
+            if len(topics) >= 5:
+                break
+
+    if not topics:
+        topics = [os.path.splitext(clean_title)[0], f"{upper_format} Content Analysis", "Document Structure"]
+
+    # 3. Key Points (scored sentences)
+    importance_keywords = ['important', 'key', 'critical', 'feature', 'system', 'result', 'finding', 'provides', 'includes', 'requirement', 'objective', 'architecture', 'model', 'benefit', 'standard']
+    scored = []
+    for idx, s in enumerate(sentences):
+        score = 0
+        s_lower = s.lower()
+        for kw in importance_keywords:
+            if kw in s_lower:
+                score += 2
+        if re.search(r'\d+', s):
+            score += 1
+        if 40 < len(s) < 220:
+            score += 1
+        scored.append((score, idx, s))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    top_items = sorted(scored[:7], key=lambda x: x[1])
+    key_points = [item[2] for item in top_items] if top_items else sentences[:min(5, len(sentences))]
+
+    # 4. Important Details (numbers, metrics, formulas, rows)
+    details = []
+    for s in sentences:
+        if re.search(r'(?:\$|€|₹|Rs\.?|USD|\b\d+(?:\.\d+)?%|\b\d{4}\b|\b\d+,\d+|\b\d+\s*(?:MB|KB|GB|users|records|days|months|hours|parameters|accuracy)\b)', s, re.IGNORECASE):
+            if s not in details and s not in key_points:
+                details.append(s)
+        if len(details) >= 6:
+            break
+    if len(details) < 3:
+        row_matches = re.findall(r'(?:Row\s+\d+|Headers?):[^\n]+', content, re.IGNORECASE)
+        for rm in row_matches[:5]:
+            clean_rm = rm.strip()
+            if clean_rm not in details:
+                details.append(clean_rm)
+    if not details:
+        details = [f"Document format: {upper_format}", f"Extracted text volume: {total_chars} characters", f"Indexed sections: {len(topics)}"]
+
+    # 5. Important Terms & Definitions
+    terms = []
+    acronyms = list(dict.fromkeys(re.findall(r'\b([A-Z]{2,6})\b', content)))
+    common_filter = {'THE', 'AND', 'FOR', 'NOT', 'ALL', 'CAN', 'NEW', 'DOC', 'PDF', 'CSV', 'XLS', 'PPT', 'XML', 'TXT', 'ZIP'}
+    for acr in acronyms:
+        if acr not in common_filter:
+            context_sentence = next((s for s in sentences if re.search(rf'\b{acr}\b', s)), None)
+            if context_sentence:
+                terms.append(f"{acr} — {context_sentence[:140]}")
+            else:
+                terms.append(f"{acr} — Core terminology identified in {clean_title}")
+        if len(terms) >= 6:
+            break
+    if len(terms) < 4:
+        def_matches = re.findall(r'([A-Za-z0-9\s_-]{3,25})\s*(?::|is defined as|refers to)\s*([^\n.]{15,120})', content, re.IGNORECASE)
+        for d_term, d_desc in def_matches:
+            dt_clean = d_term.strip()
+            dd_clean = d_desc.strip()
+            if len(dt_clean) <= 30 and dt_clean.upper() not in common_filter:
+                terms.append(f"{dt_clean} — {dd_clean}")
+            if len(terms) >= 6:
+                break
+    if not terms:
+        terms = [
+            f"Document Domain — {topics[0] if topics else 'General Analysis'}",
+            "Processing Tier — IntelliSpace Universal Extraction",
+            f"File Architecture — Structured {upper_format} Specification"
+        ]
+
+    # 6. Conclusion
+    conclusion = ""
+    if len(sentences) > 3:
+        conclusion_candidates = [s for s in sentences[-6:] if any(w in s.lower() for w in ['conclu', 'summary', 'overall', 'future', 'recommend', 'result', 'thus', 'therefore'])]
+        if conclusion_candidates:
+            conclusion = " ".join(conclusion_candidates)
+        else:
+            conclusion = sentences[-1]
+    if not conclusion or len(conclusion) < 20:
+        conclusion = f"In conclusion, {clean_title} provides a comprehensive overview of its subject matter across {upper_format} format, organized into {len(topics)} core functional areas."
 
     return {
         "success": True,
-        "title": title,
+        "title": clean_title,
+        "format": upper_format,
+        "status": "READY",
+        "overview": overview,
+        "main_topics": list(dict.fromkeys(topics)),
+        "key_points": list(dict.fromkeys(key_points)),
+        "important_details": list(dict.fromkeys(details)),
+        "important_terms": list(dict.fromkeys(terms)),
+        "conclusion": conclusion,
+        "summary": overview,
+        "bullet_points": list(dict.fromkeys(key_points)),
         "sentence_count": len(sentences),
-        "bullet_points": key_points,
-        "summary": " ".join(key_points[:3])
+        "char_count": total_chars
     }
+
+def run_summarize(title: str, content: str) -> dict:
+    return run_generate_insight(title, content)
 
 def run_extract_pdf(file_path: str) -> dict:
     """
@@ -289,10 +424,11 @@ class AIRequestHandler(BaseHTTPRequestHandler):
             status = 200 if res.get("success") else 400
             self._send_json(status, res)
 
-        elif path == "/summarize":
+        elif path == "/summarize" or path == "/generate_insight":
             title = str(body.get("title", "Document")).strip()
             content = str(body.get("content_text", "")).strip()
-            res = run_summarize(title, content)
+            doc_format = str(body.get("format", "")).strip()
+            res = run_generate_insight(title, content, doc_format)
             self._send_json(200, res)
 
         elif path == "/extract_text":

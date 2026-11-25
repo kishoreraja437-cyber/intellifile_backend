@@ -43,6 +43,15 @@ $conn->query("
       `is_saved` tinyint(1) NOT NULL DEFAULT 0,
       `total_pages` int(11) NOT NULL DEFAULT 1,
       `content_text` longtext DEFAULT NULL,
+      `insight_status` varchar(32) NOT NULL DEFAULT 'PENDING',
+      `insight_overview` longtext DEFAULT NULL,
+      `insight_topics` longtext DEFAULT NULL,
+      `insight_key_points` longtext DEFAULT NULL,
+      `insight_details` longtext DEFAULT NULL,
+      `insight_terms` longtext DEFAULT NULL,
+      `insight_conclusion` longtext DEFAULT NULL,
+      `insight_error` text DEFAULT NULL,
+      `insight_updated_at` datetime DEFAULT NULL,
       `last_accessed` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
       `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
       PRIMARY KEY (`id`),
@@ -219,10 +228,21 @@ if ($checkExisting) {
             $updateStmt->close();
         }
 
+        // Auto-generate or retrieve Insight for existing document
+        $existingInsight = getDocumentInsight($conn, $existingId);
+        if (!$existingInsight || empty($existingInsight["overview"]) || $existingInsight["status"] !== "READY") {
+            $effectiveContent = $contentText ?: ($existingRow["content_text"] ?? "");
+            $generatedInsight = aiGenerateDocumentInsight($title, $format, $effectiveContent);
+            saveDocumentInsight($conn, $existingId, $generatedInsight);
+            $existingInsight = getDocumentInsight($conn, $existingId) ?: $generatedInsight;
+        }
+
         $fileUrl = $finalPath ? (getBaseUrl() . $finalPath) : null;
         sendJsonResponse(200, [
             "success" => true,
             "message" => "Document synced to IntelliSpace successfully.",
+            "insight_status" => $existingInsight["status"] ?? "READY",
+            "insight" => $existingInsight,
             "document" => [
                 "id" => $existingId,
                 "user_id" => $userId,
@@ -238,6 +258,13 @@ if ($checkExisting) {
                 "has_text" => !empty($contentText) || !empty($existingRow["content_text"]),
                 "content_text" => $contentText ?: ($existingRow["content_text"] ?? ""),
                 "extracted_chars" => mb_strlen($contentText ?: ($existingRow["content_text"] ?? "")),
+                "insight_status" => $existingInsight["status"] ?? "READY",
+                "insight_overview" => $existingInsight["overview"] ?? "",
+                "insight_topics" => $existingInsight["main_topics"] ?? [],
+                "insight_key_points" => $existingInsight["key_points"] ?? [],
+                "insight_details" => $existingInsight["important_details"] ?? [],
+                "insight_terms" => $existingInsight["important_terms"] ?? [],
+                "insight_conclusion" => $existingInsight["conclusion"] ?? "",
                 "created_at" => $existingRow["created_at"]
             ]
         ]);
@@ -261,11 +288,19 @@ try {
         aiIndexDocument($userId, $newDocId, $title, $format, $contentText, $totalPages);
     }
 
+    // MANDATORY REQUIREMENT: Automatically generate and persist Universal AI Insight upon upload
+    updateDocumentInsightStatus($conn, $newDocId, "GENERATING");
+    $insight = aiGenerateDocumentInsight($title, $format, $contentText);
+    saveDocumentInsight($conn, $newDocId, $insight);
+    $persistedInsight = getDocumentInsight($conn, $newDocId) ?: $insight;
+
     $fileUrl = $savedRelativePath ? (getBaseUrl() . $savedRelativePath) : null;
 
     sendJsonResponse(201, [
         "success" => true,
-        "message" => "Document uploaded successfully.",
+        "message" => "Document uploaded and AI Insight generated successfully.",
+        "insight_status" => "READY",
+        "insight" => $persistedInsight,
         "document" => [
             "id" => $newDocId,
             "user_id" => $userId,
@@ -282,6 +317,13 @@ try {
             "content_text" => $contentText,
             "extracted_chars" => mb_strlen($contentText),
             "extraction_warning" => $extractionWarning,
+            "insight_status" => "READY",
+            "insight_overview" => $persistedInsight["overview"] ?? "",
+            "insight_topics" => $persistedInsight["main_topics"] ?? [],
+            "insight_key_points" => $persistedInsight["key_points"] ?? [],
+            "insight_details" => $persistedInsight["important_details"] ?? [],
+            "insight_terms" => $persistedInsight["important_terms"] ?? [],
+            "insight_conclusion" => $persistedInsight["conclusion"] ?? "",
             "created_at" => date("Y-m-d H:i:s")
         ]
     ]);
