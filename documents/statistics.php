@@ -68,7 +68,7 @@ try {
     $stmt->close();
 
     // Saved count (deduplicated by title)
-    $stmt = $conn->prepare("SELECT COUNT(DISTINCT LOWER(TRIM(title))) AS saved FROM documents WHERE user_id = ? AND (is_saved = 1 OR is_bookmarked = 1)");
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT LOWER(TRIM(title))) AS saved FROM documents WHERE user_id = ? AND (is_saved = 1 OR is_bookmarked = 1 OR priority IS NOT NULL)");
     $stmt->bind_param("i", $userId);
     $stmt->execute();
     $sRow = $stmt->get_result()->fetch_assoc();

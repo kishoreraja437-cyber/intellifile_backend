@@ -18,7 +18,7 @@ $priorityFilter = strtoupper(trim($_GET["priority"] ?? "ALL"));
 
 $sql = "SELECT id, title, format, file_size, file_path, category, location, priority, is_bookmarked, is_saved, last_accessed, created_at 
         FROM documents 
-        WHERE user_id = ? AND (is_saved = 1 OR is_bookmarked = 1)";
+        WHERE user_id = ? AND (is_saved = 1 OR is_bookmarked = 1 OR priority IS NOT NULL)";
 
 $params = [$userId];
 $types = "i";
